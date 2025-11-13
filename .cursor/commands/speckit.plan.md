@@ -50,7 +50,22 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Rationale: [why chosen]
    - Alternatives considered: [what else evaluated]
 
-**Output**: research.md with all NEEDS CLARIFICATION resolved
+4. **For Web Scraping Projects**: HTML Structure Inspection (MANDATORY)
+   - If the feature involves scraping HTML from external websites:
+     - Fetch actual target webpage(s) using the identified URL pattern
+     - Inspect HTML structure using browser DevTools, automated inspection script, or manual inspection
+     - Document exact CSS selectors, class names, data attributes, or XPath expressions for all data to be extracted
+     - Test selectors with multiple sample pages to ensure consistency
+     - Document fallback strategies if primary selectors fail
+     - Include HTML structure samples and examples in research.md
+   - **Output**: research.md must contain a "HTML Structure Inspection" section with:
+     - Exact selectors for all data to be extracted
+     - HTML structure examples (actual HTML snippets)
+     - Selector reliability notes (e.g., "stable", "may change", "requires testing")
+     - Fallback selector strategies
+     - Sample URLs tested
+
+**Output**: research.md with all NEEDS CLARIFICATION resolved, including HTML structure documentation for scraping projects
 
 ### Phase 1: Design & Contracts
 
