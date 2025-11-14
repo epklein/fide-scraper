@@ -11,6 +11,9 @@ Write tests for critical functionality to ensure reliability and correctness.
 ### III. Simplicity
 Keep the codebase simple and maintainable. Avoid unnecessary complexity.
 
+### IV. Documentation
+Keep codebase documentation (e.g., README.md) always up to date.
+
 ## Governance
 
 This constitution guides all development decisions. Amendments require documentation and team consensus.
