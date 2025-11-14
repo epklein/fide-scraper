@@ -35,6 +35,3 @@
 - All requirements are testable and technology-agnostic
 - Edge cases for error handling are identified
 - Success criteria are measurable and user-focused
-- Updated to include blitz rating support alongside standard and rapid ratings
-
-

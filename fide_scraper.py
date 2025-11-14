@@ -82,28 +82,26 @@ def fetch_fide_profile(fide_id: str, timeout: int = 10) -> Optional[str]:
         raise requests.HTTPError(f"HTTP error {response.status_code}: {e}")
 
 
-def extract_standard_rating(html: str) -> Optional[int]:
+def _extract_rating_by_selector(html: str, selector: str) -> Optional[int]:
     """
-    Extract standard rating from FIDE profile HTML.
+    Extract rating from FIDE profile HTML using a CSS selector.
     
-    Uses the documented selector from research.md: div.profile-standart
-    The rating value is in the first <p> tag within this div.
+    Shared implementation for extracting ratings from FIDE profile pages.
+    The rating value is in the first <p> tag within the selected div.
     
     Args:
         html: HTML content from FIDE profile page
+        selector: CSS selector for the rating div (e.g., 'div.profile-standart')
         
     Returns:
-        Standard rating as integer, or None if not found/unrated
+        Rating as integer, or None if not found/unrated
     """
     if not html:
         return None
     
     try:
         soup = BeautifulSoup(html, 'html.parser')
-        
-        # Use documented selector from research.md
-        # Note: FIDE website uses "standart" (typo) instead of "standard"
-        rating_div = soup.select_one('div.profile-standart')
+        rating_div = soup.select_one(selector)
         
         if rating_div:
             # Get the first <p> tag which contains the rating
@@ -123,6 +121,23 @@ def extract_standard_rating(html: str) -> Optional[int]:
         return None
     except Exception:
         return None
+
+
+def extract_standard_rating(html: str) -> Optional[int]:
+    """
+    Extract standard rating from FIDE profile HTML.
+    
+    Uses the documented selector from research.md: div.profile-standart
+    The rating value is in the first <p> tag within this div.
+    
+    Args:
+        html: HTML content from FIDE profile page
+        
+    Returns:
+        Standard rating as integer, or None if not found/unrated
+    """
+    # Note: FIDE website uses "standart" (typo) instead of "standard"
+    return _extract_rating_by_selector(html, 'div.profile-standart')
 
 
 def extract_rapid_rating(html: str) -> Optional[int]:
@@ -138,33 +153,7 @@ def extract_rapid_rating(html: str) -> Optional[int]:
     Returns:
         Rapid rating as integer, or None if not found/unrated
     """
-    if not html:
-        return None
-    
-    try:
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # Use documented selector from research.md
-        rating_div = soup.select_one('div.profile-rapid')
-        
-        if rating_div:
-            # Get the first <p> tag which contains the rating
-            p_tag = rating_div.find('p')
-            if p_tag:
-                rating_text = p_tag.get_text(strip=True)
-                
-                # Check if it says "Not rated"
-                if rating_text.lower() in ['not rated', 'unrated']:
-                    return None
-                
-                # Extract numeric rating
-                rating = _extract_rating_from_text(rating_text)
-                if rating is not None:
-                    return rating
-        
-        return None
-    except Exception:
-        return None
+    return _extract_rating_by_selector(html, 'div.profile-rapid')
 
 
 def extract_blitz_rating(html: str) -> Optional[int]:
@@ -180,33 +169,7 @@ def extract_blitz_rating(html: str) -> Optional[int]:
     Returns:
         Blitz rating as integer, or None if not found/unrated
     """
-    if not html:
-        return None
-    
-    try:
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # Use documented selector from research.md
-        rating_div = soup.select_one('div.profile-blitz')
-        
-        if rating_div:
-            # Get the first <p> tag which contains the rating
-            p_tag = rating_div.find('p')
-            if p_tag:
-                rating_text = p_tag.get_text(strip=True)
-                
-                # Check if it says "Not rated"
-                if rating_text.lower() in ['not rated', 'unrated']:
-                    return None
-                
-                # Extract numeric rating
-                rating = _extract_rating_from_text(rating_text)
-                if rating is not None:
-                    return rating
-        
-        return None
-    except Exception:
-        return None
+    return _extract_rating_by_selector(html, 'div.profile-blitz')
 
 
 def _extract_rating_from_text(text: str) -> Optional[int]:
@@ -227,29 +190,6 @@ def _extract_rating_from_text(text: str) -> Optional[int]:
         # Validate rating is in reasonable range
         if 0 <= rating <= 3000:
             return rating
-    return None
-
-
-def _find_rating_in_text(text: str, keywords: list) -> Optional[int]:
-    """
-    Find rating near specific keywords in text.
-    
-    Args:
-        text: Full page text
-        keywords: List of keywords to search for
-        
-    Returns:
-        Rating as integer, or None if not found
-    """
-    import re
-    for keyword in keywords:
-        # Look for keyword followed by a number
-        pattern = rf'{keyword}.*?(\d{{3,4}})'
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            rating = int(match.group(1))
-            if 0 <= rating <= 3000:
-                return rating
     return None
 
 
