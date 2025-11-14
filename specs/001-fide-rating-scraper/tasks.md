@@ -46,9 +46,9 @@
 
 ## Phase 3: User Story 1 - Retrieve Player Ratings by FIDE ID (Priority: P1) 🎯 MVP
 
-**Goal**: Accept a FIDE ID, scrape the FIDE website, and output standard and rapid ratings in a human-readable format.
+**Goal**: Accept a FIDE ID, scrape the FIDE website, and output standard, rapid, and blitz ratings in a human-readable format.
 
-**Independent Test**: Run the script with a known FIDE ID (e.g., `python fide_scraper.py 538026660`) and verify that both standard and rapid ratings are retrieved and displayed correctly.
+**Independent Test**: Run the script with a known FIDE ID (e.g., `python fide_scraper.py 538026660`) and verify that standard, rapid, and blitz ratings are retrieved and displayed correctly.
 
 ### Tests for User Story 1
 
@@ -56,8 +56,10 @@
 
 - [x] T007 [P] [US1] Unit test for FIDE ID validation function in tests/test_fide_scraper.py (test valid/invalid formats)
 - [x] T008 [P] [US1] Unit test for rating extraction/parsing with mocked HTML in tests/test_fide_scraper.py
+- [ ] T008a [P] [US1] Unit test for blitz rating extraction/parsing with mocked HTML in tests/test_fide_scraper.py
 - [x] T009 [P] [US1] Unit test for error handling (network errors, HTTP errors, parsing errors) in tests/test_fide_scraper.py
 - [x] T010 [P] [US1] Integration test for end-to-end flow with real FIDE ID in tests/test_integration.py (requires network)
+- [ ] T010a [P] [US1] Update integration tests to verify blitz rating extraction in end-to-end flow in tests/test_integration.py
 
 ### Implementation for User Story 1
 
@@ -66,10 +68,13 @@
 - [x] T013 [US1] Implement HTTP request function with timeout (10 seconds) and error handling in fide_scraper.py
 - [x] T014 [US1] Implement HTML parsing function to extract standard rating from FIDE profile page in fide_scraper.py (use selectors documented in research.md HTML Structure Inspection section)
 - [x] T015 [US1] Implement HTML parsing function to extract rapid rating from FIDE profile page in fide_scraper.py (use selectors documented in research.md HTML Structure Inspection section)
+- [ ] T015a [US1] Implement HTML parsing function to extract blitz rating from FIDE profile page in fide_scraper.py (use selector div.profile-blitz documented in research.md)
 - [x] T016 [US1] Implement function to format and display ratings output (handles unrated cases) in fide_scraper.py
+- [ ] T016a [US1] Update format_ratings_output function to include blitz rating in output format in fide_scraper.py
 - [x] T017 [US1] Implement main function with command-line argument parsing (accepts FIDE ID as argument) in fide_scraper.py
 - [x] T018 [US1] Implement stdin input handling (if no argument provided, read from stdin) in fide_scraper.py
 - [x] T019 [US1] Integrate all functions: validation → request → parsing → output in main function in fide_scraper.py
+- [ ] T019a [US1] Update main function to extract and display blitz rating alongside standard and rapid ratings in fide_scraper.py
 - [x] T020 [US1] Implement proper exit codes (0 for success, 1 for errors, 2 for invalid format) per CLI contract in fide_scraper.py
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently. Run `python fide_scraper.py <FIDE_ID>` to verify.
@@ -119,7 +124,7 @@
 - **Foundational Phase**: T006 can run in parallel with T005 (different files)
 - **User Story 1 Tests**: T007, T008, T009, T010 can all run in parallel (different test functions)
 - **User Story 1 Implementation**: 
-  - T014 and T015 can run in parallel (different parsing functions)
+  - T014, T015, and T015a can run in parallel (different parsing functions)
   - T021, T022, T023, T024, T026 can run in parallel in Polish phase
 
 ---
@@ -136,6 +141,7 @@ Task: "Integration test for end-to-end flow in tests/test_integration.py"
 # Launch parsing functions in parallel:
 Task: "Implement HTML parsing function to extract standard rating in fide_scraper.py"
 Task: "Implement HTML parsing function to extract rapid rating in fide_scraper.py"
+Task: "Implement HTML parsing function to extract blitz rating in fide_scraper.py"
 ```
 
 ---

@@ -27,12 +27,12 @@
 
 **Attributes**:
 - **Value**: Integer (rating value, e.g., 2500)
-- **Type**: Enumeration - "standard" or "rapid"
+- **Type**: Enumeration - "standard", "rapid", or "blitz"
 - **Status**: Enumeration - "rated" or "unrated"
 
 **Validation Rules**:
 - Rating value must be a positive integer (typically 0-3000 range)
-- Type must be either "standard" or "rapid"
+- Type must be either "standard", "rapid", or "blitz"
 - Status indicates if player has a rating in this category
 
 **State Transitions**: N/A (read-only data from FIDE website)
@@ -45,14 +45,16 @@
 - **fide_id**: FIDE ID (string)
 - **standard_rating**: Player Rating (standard type) or null if unrated
 - **rapid_rating**: Player Rating (rapid type) or null if unrated
+- **blitz_rating**: Player Rating (blitz type) or null if unrated
 
 **Relationships**:
 - Contains exactly one FIDE ID
 - Contains zero or one standard rating
 - Contains zero or one rapid rating
+- Contains zero or one blitz rating
 
 **Validation Rules**:
-- At least one rating (standard or rapid) should be present for a valid profile
+- At least one rating (standard, rapid, or blitz) should be present for a valid profile
 - FIDE ID must be valid
 
 **State Transitions**: N/A (ephemeral data structure, not persisted)

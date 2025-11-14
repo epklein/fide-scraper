@@ -1,55 +1,43 @@
-# Implementation Plan: FIDE Rating Scraper
+# Implementation Plan: FIDE Rating Scraper (with Blitz Rating Support)
 
-**Branch**: `001-fide-rating-scraper` | **Date**: 2025-01-27 | **Spec**: [spec.md](spec.md)
+**Branch**: `001-fide-rating-scraper` | **Date**: 2025-01-27 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/001-fide-rating-scraper/spec.md`
 
 **Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/commands/plan.md` for the execution workflow.
 
 ## Summary
 
-Build a simple Python CLI script that accepts a FIDE ID, scrapes the FIDE website for player ratings, and outputs standard and rapid ratings in a human-readable format. The script must handle errors gracefully and validate inputs.
+Extend the existing FIDE rating scraper to include blitz rating extraction alongside standard and rapid ratings. The implementation follows the same pattern as existing rating extraction functions, using the documented HTML selector `div.profile-blitz` from research.md. This enhancement requires adding a new extraction function, updating the output formatting, and extending test coverage.
 
 ## Technical Context
 
 **Language/Version**: Python 3.11+  
-**Primary Dependencies**: requests, beautifulsoup4  
-**Storage**: N/A (no persistence required)  
+**Primary Dependencies**: requests>=2.31.0, beautifulsoup4>=4.12.0  
+**Storage**: N/A (ephemeral data, no persistence)  
 **Testing**: pytest  
-**Target Platform**: Terminal/CLI (cross-platform: macOS, Linux, Windows)  
-**Project Type**: single (simple standalone script)  
-**Performance Goals**: Retrieve and display ratings within 5 seconds under normal network conditions (per SC-001)  
-**Constraints**: Simple, maintainable codebase; minimal dependencies; clear error messages; handle network failures gracefully  
-**Scale/Scope**: Single user, single request at a time; no concurrent requests needed
+**Target Platform**: Cross-platform (Linux, macOS, Windows)  
+**Project Type**: Single script (CLI tool)  
+**Performance Goals**: < 5 seconds response time under normal network conditions  
+**Constraints**: Single HTTP request per execution, 10-second timeout, no retries  
+**Scale/Scope**: Single-user CLI tool, processes one FIDE ID per execution
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-### Pre-Research Check
+### I. Code Quality ✅
+- **Status**: PASS
+- **Rationale**: Implementation follows existing patterns (extract_standard_rating, extract_rapid_rating), maintains consistent code style, and adds clear documentation
 
-### I. Code Quality
-✅ **PASS**: Script will follow Python best practices with clear structure, proper error handling, and documentation (docstrings, comments where needed).
+### II. Testing ✅
+- **Status**: PASS
+- **Rationale**: New blitz rating extraction function will have unit tests following existing test patterns. Integration tests will verify end-to-end blitz rating retrieval
 
-### II. Testing
-✅ **PASS**: Critical functionality (FIDE ID validation, rating extraction, error handling) will be covered by tests using pytest.
+### III. Simplicity ✅
+- **Status**: PASS
+- **Rationale**: Feature adds minimal complexity - single new extraction function following established pattern, no architectural changes required
 
-### III. Simplicity
-✅ **PASS**: Single-file script with minimal dependencies. No unnecessary abstractions or complexity. Direct approach: input → scrape → output.
-
-**Gate Status**: ✅ **ALL GATES PASS** - Proceeded to Phase 0 research.
-
-### Post-Design Check (After Phase 1)
-
-### I. Code Quality
-✅ **PASS**: Design maintains simplicity with single-file script. Clear separation of concerns: validation, scraping, parsing, output. Error handling is comprehensive yet straightforward.
-
-### II. Testing
-✅ **PASS**: Test structure defined (unit tests with mocks, integration tests for network calls). All critical paths covered: validation, scraping, parsing, error handling.
-
-### III. Simplicity
-✅ **PASS**: Minimal dependencies (requests + beautifulsoup4 only). Single-file script architecture. No unnecessary abstractions. Direct data flow: input → validate → scrape → parse → output.
-
-**Gate Status**: ✅ **ALL GATES PASS** - Design maintains constitution compliance.
+**Overall**: All constitution gates pass. Feature is a straightforward extension of existing functionality.
 
 ## Project Structure
 
@@ -68,23 +56,19 @@ specs/[###-feature]/
 ### Source Code (repository root)
 
 ```text
-fide_scraper.py          # Main script (single file for simplicity)
+fide_scraper.py          # Main script with rating extraction functions
+requirements.txt         # Python dependencies
+README.md               # Project documentation
 
 tests/
-├── test_fide_scraper.py # Unit tests for core functionality
-└── test_integration.py  # Integration tests (may require network access)
-
-requirements.txt         # Python dependencies
-README.md                # Usage instructions
+├── test_fide_scraper.py    # Unit tests for rating extraction functions
+└── test_integration.py     # Integration tests for end-to-end flows
 ```
 
-**Structure Decision**: Single-file script approach aligns with Constitution Principle III (Simplicity). The script will be self-contained with minimal dependencies. Tests are separated into unit tests (mockable) and integration tests (actual network calls).
+**Structure Decision**: Single script project. The project uses a flat structure with the main script at the root and tests in a `tests/` directory. This structure is appropriate for a simple CLI tool with minimal complexity.
 
 ## Complexity Tracking
 
 > **Fill ONLY if Constitution Check has violations that must be justified**
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+No violations - all constitution gates pass. Feature is a simple extension of existing functionality.

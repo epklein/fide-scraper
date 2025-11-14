@@ -32,9 +32,10 @@ class TestEndToEndFlow:
         # Extract ratings
         standard = fide_scraper.extract_standard_rating(html)
         rapid = fide_scraper.extract_rapid_rating(html)
+        blitz = fide_scraper.extract_blitz_rating(html)
         
         # At least one rating should be present
-        assert standard is not None or rapid is not None
+        assert standard is not None or rapid is not None or blitz is not None
     
     def test_end_to_end_invalid_fide_id(self):
         """Test complete flow with invalid FIDE ID."""
@@ -57,9 +58,11 @@ class TestEndToEndFlow:
         if html:
             standard = fide_scraper.extract_standard_rating(html)
             rapid = fide_scraper.extract_rapid_rating(html)
-            # Both should be None for non-existent player
+            blitz = fide_scraper.extract_blitz_rating(html)
+            # All should be None for non-existent player
             assert standard is None
             assert rapid is None
+            assert blitz is None
 
 
 @pytest.mark.integration
@@ -81,13 +84,20 @@ class TestEdgeCases:
                 <p>Not rated</p>
                 <p style="font-size: 8px; padding:0; margin:0;">RAPID<span class=inactiv_note></p>
             </div>
+            <div class="profile-blitz profile-game ">
+                <img src="/img/logo_blitz.svg" alt="blitz" height=25>
+                <p>Not rated</p>
+                <p style="font-size: 8px; padding:0; margin:0;">BLITZ<span class=inactiv_note></p>
+            </div>
         </div>
         """
         standard = fide_scraper.extract_standard_rating(html)
         rapid = fide_scraper.extract_rapid_rating(html)
+        blitz = fide_scraper.extract_blitz_rating(html)
         # Should return None for unrated without raising exception
         assert standard is None
         assert rapid is None
+        assert blitz is None
     
     def test_missing_ratings(self):
         """Test handling when one rating is missing using documented HTML structure."""
@@ -104,16 +114,25 @@ class TestEdgeCases:
         """
         standard = fide_scraper.extract_standard_rating(html)
         rapid = fide_scraper.extract_rapid_rating(html)
-        # Standard should be found, rapid should be None
+        blitz = fide_scraper.extract_blitz_rating(html)
+        # Standard should be found, rapid and blitz should be None
         assert standard == 2500
         assert rapid is None
+        assert blitz is None
     
     def test_format_output_unrated(self):
         """Test formatting output with unrated ratings."""
-        output = fide_scraper.format_ratings_output(2500, None)
+        output = fide_scraper.format_ratings_output(2500, None, None)
         assert "Standard: 2500" in output
         assert "Rapid: Unrated" in output
+        assert "Blitz: Unrated" in output
         
-        output = fide_scraper.format_ratings_output(None, 2450)
+        output = fide_scraper.format_ratings_output(None, 2450, 2400)
         assert "Standard: Unrated" in output
         assert "Rapid: 2450" in output
+        assert "Blitz: 2400" in output
+        
+        output = fide_scraper.format_ratings_output(2500, 2450, None)
+        assert "Standard: 2500" in output
+        assert "Rapid: 2450" in output
+        assert "Blitz: Unrated" in output

@@ -40,12 +40,21 @@ python fide_scraper.py
 ```
 Standard: 2500
 Rapid: 2450
+Blitz: 2400
 ```
 
 **Success Case** (Unrated in one category):
 ```
 Standard: 2500
+Rapid: 2450
+Blitz: Unrated
+```
+
+**Success Case** (Unrated in multiple categories):
+```
+Standard: 2500
 Rapid: Unrated
+Blitz: Unrated
 ```
 
 **Error Cases**:
@@ -77,7 +86,7 @@ Error: Failed to retrieve ratings. HTTP status: 500
 
 1. **Input Validation**: Validate FIDE ID format before making network request
 2. **Network Request**: Make HTTP GET request to FIDE website
-3. **HTML Parsing**: Extract standard and rapid ratings from HTML response
+3. **HTML Parsing**: Extract standard, rapid, and blitz ratings from HTML response
 4. **Output**: Display ratings in human-readable format
 5. **Error Handling**: Display clear error messages for all failure cases
 

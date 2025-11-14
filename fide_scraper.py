@@ -167,6 +167,48 @@ def extract_rapid_rating(html: str) -> Optional[int]:
         return None
 
 
+def extract_blitz_rating(html: str) -> Optional[int]:
+    """
+    Extract blitz rating from FIDE profile HTML.
+    
+    Uses the documented selector from research.md: div.profile-blitz
+    The rating value is in the first <p> tag within this div.
+    
+    Args:
+        html: HTML content from FIDE profile page
+        
+    Returns:
+        Blitz rating as integer, or None if not found/unrated
+    """
+    if not html:
+        return None
+    
+    try:
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Use documented selector from research.md
+        rating_div = soup.select_one('div.profile-blitz')
+        
+        if rating_div:
+            # Get the first <p> tag which contains the rating
+            p_tag = rating_div.find('p')
+            if p_tag:
+                rating_text = p_tag.get_text(strip=True)
+                
+                # Check if it says "Not rated"
+                if rating_text.lower() in ['not rated', 'unrated']:
+                    return None
+                
+                # Extract numeric rating
+                rating = _extract_rating_from_text(rating_text)
+                if rating is not None:
+                    return rating
+        
+        return None
+    except Exception:
+        return None
+
+
 def _extract_rating_from_text(text: str) -> Optional[int]:
     """
     Extract numeric rating from text string.
@@ -211,21 +253,23 @@ def _find_rating_in_text(text: str, keywords: list) -> Optional[int]:
     return None
 
 
-def format_ratings_output(standard_rating: Optional[int], rapid_rating: Optional[int]) -> str:
+def format_ratings_output(standard_rating: Optional[int], rapid_rating: Optional[int], blitz_rating: Optional[int] = None) -> str:
     """
     Format ratings for human-readable output.
     
     Args:
         standard_rating: Standard rating or None
         rapid_rating: Rapid rating or None
+        blitz_rating: Blitz rating or None
         
     Returns:
         Formatted string for display
     """
     standard_str = str(standard_rating) if standard_rating is not None else "Unrated"
     rapid_str = str(rapid_rating) if rapid_rating is not None else "Unrated"
+    blitz_str = str(blitz_rating) if blitz_rating is not None else "Unrated"
     
-    return f"Standard: {standard_str}\nRapid: {rapid_str}"
+    return f"Standard: {standard_str}\nRapid: {rapid_str}\nBlitz: {blitz_str}"
 
 
 def get_fide_id_from_args() -> Optional[str]:
@@ -282,14 +326,15 @@ def main():
         
         standard_rating = extract_standard_rating(html)
         rapid_rating = extract_rapid_rating(html)
+        blitz_rating = extract_blitz_rating(html)
         
         # Check if we got at least one rating
-        if standard_rating is None and rapid_rating is None:
+        if standard_rating is None and rapid_rating is None and blitz_rating is None:
             print(f"Error: Unable to extract ratings from FIDE profile (FIDE ID: {fide_id})", file=sys.stderr)
             sys.exit(1)
         
         # Output ratings
-        output = format_ratings_output(standard_rating, rapid_rating)
+        output = format_ratings_output(standard_rating, rapid_rating, blitz_rating)
         print(output)
         sys.exit(0)
         

@@ -3,6 +3,8 @@
 Auto-generated from all feature plans. Last updated: 2025-11-13
 
 ## Active Technologies
+- Python 3.11+ + requests>=2.31.0, beautifulsoup4>=4.12.0 (001-fide-rating-scraper)
+- N/A (ephemeral data, no persistence) (001-fide-rating-scraper)
 
 - Python 3.11+ + requests, beautifulsoup4 (001-fide-rating-scraper)
 
@@ -22,6 +24,7 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.11+: Follow standard conventions
 
 ## Recent Changes
+- 001-fide-rating-scraper: Added Python 3.11+ + requests>=2.31.0, beautifulsoup4>=4.12.0
 
 - 001-fide-rating-scraper: Added Python 3.11+ + requests, beautifulsoup4
 

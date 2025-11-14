@@ -26,7 +26,7 @@
 
 **Rationale**:
 - Standard FIDE ratings website structure
-- Profile pages contain both standard and rapid ratings
+- Profile pages contain standard, rapid, and blitz ratings
 
 **Alternatives considered**:
 - FIDE API: No official public API available for ratings lookup
@@ -42,6 +42,7 @@
 3. Identify exact CSS selectors, class names, or data attributes for:
    - Standard rating element
    - Rapid rating element
+   - Blitz rating element
 4. Document the selectors with examples
 5. Test selectors with multiple player profiles to ensure consistency
 
@@ -68,6 +69,7 @@
 **Selectors Documented**:
 - Standard rating selector: `div.profile-standart` → first `<p>` tag contains rating
 - Rapid rating selector: `div.profile-rapid` → first `<p>` tag contains rating
+- Blitz rating selector: `div.profile-blitz` → first `<p>` tag contains rating
 - Note: FIDE website uses "standart" (typo) instead of "standard" in the class name
 - Unrated indicator: `<p>` tag contains "Not rated" text
 

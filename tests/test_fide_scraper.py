@@ -78,6 +78,21 @@ class TestRatingExtraction:
         rating = fide_scraper.extract_rapid_rating(html)
         assert rating == 2450
     
+    def test_extract_blitz_rating_success(self):
+        """Test extracting blitz rating from HTML using documented structure from research.md."""
+        # HTML structure matches research.md exactly
+        html = """
+        <div class="profile-games ">
+            <div class="profile-blitz profile-game ">
+                <img src="/img/logo_blitz.svg" alt="blitz" height=25>
+                <p>2400</p>
+                <p style="font-size: 8px; padding:0; margin:0;">BLITZ<span class=inactiv_note></p>
+            </div>
+        </div>
+        """
+        rating = fide_scraper.extract_blitz_rating(html)
+        assert rating == 2400
+    
     def test_extract_rating_unrated(self):
         """Test handling unrated players using documented structure from research.md."""
         # HTML structure matches research.md exactly - shows "Not rated" case
@@ -93,21 +108,30 @@ class TestRatingExtraction:
                 <p>Not rated</p>
                 <p style="font-size: 8px; padding:0; margin:0;">RAPID<span class=inactiv_note></p>
             </div>
+            <div class="profile-blitz profile-game ">
+                <img src="/img/logo_blitz.svg" alt="blitz" height=25>
+                <p>Not rated</p>
+                <p style="font-size: 8px; padding:0; margin:0;">BLITZ<span class=inactiv_note></p>
+            </div>
         </div>
         """
         standard = fide_scraper.extract_standard_rating(html)
         rapid = fide_scraper.extract_rapid_rating(html)
+        blitz = fide_scraper.extract_blitz_rating(html)
         # Should return None for unrated
         assert standard is None
         assert rapid is None
+        assert blitz is None
     
     def test_extract_rating_missing_element(self):
         """Test handling missing rating elements (no profile-games div)."""
         html = "<html><body></body></html>"
         standard = fide_scraper.extract_standard_rating(html)
         rapid = fide_scraper.extract_rapid_rating(html)
+        blitz = fide_scraper.extract_blitz_rating(html)
         assert standard is None
         assert rapid is None
+        assert blitz is None
     
     def test_extract_rating_partial_structure(self):
         """Test handling when profile-games exists but rating divs are missing."""
@@ -119,8 +143,10 @@ class TestRatingExtraction:
         """
         standard = fide_scraper.extract_standard_rating(html)
         rapid = fide_scraper.extract_rapid_rating(html)
+        blitz = fide_scraper.extract_blitz_rating(html)
         assert standard is None
         assert rapid is None
+        assert blitz is None
     
     def test_extract_rating_mixed_rated_unrated(self):
         """Test handling when one rating is present and one is unrated."""
@@ -137,12 +163,33 @@ class TestRatingExtraction:
                 <p>Not rated</p>
                 <p style="font-size: 8px; padding:0; margin:0;">RAPID<span class=inactiv_note></p>
             </div>
+            <div class="profile-blitz profile-game ">
+                <img src="/img/logo_blitz.svg" alt="blitz" height=25>
+                <p>2400</p>
+                <p style="font-size: 8px; padding:0; margin:0;">BLITZ<span class=inactiv_note></p>
+            </div>
         </div>
         """
         standard = fide_scraper.extract_standard_rating(html)
         rapid = fide_scraper.extract_rapid_rating(html)
+        blitz = fide_scraper.extract_blitz_rating(html)
         assert standard == 2500
         assert rapid is None
+        assert blitz == 2400
+    
+    def test_extract_blitz_rating_unrated(self):
+        """Test handling unrated blitz rating."""
+        html = """
+        <div class="profile-games ">
+            <div class="profile-blitz profile-game ">
+                <img src="/img/logo_blitz.svg" alt="blitz" height=25>
+                <p>Not rated</p>
+                <p style="font-size: 8px; padding:0; margin:0;">BLITZ<span class=inactiv_note></p>
+            </div>
+        </div>
+        """
+        blitz = fide_scraper.extract_blitz_rating(html)
+        assert blitz is None
 
 
 class TestErrorHandling:
@@ -188,6 +235,33 @@ class TestErrorHandling:
         # Should not raise exception, should return None or handle gracefully
         standard = fide_scraper.extract_standard_rating(invalid_html)
         rapid = fide_scraper.extract_rapid_rating(invalid_html)
+        blitz = fide_scraper.extract_blitz_rating(invalid_html)
         # Either None or exception handled gracefully
         assert standard is None or isinstance(standard, (int, str, type(None)))
         assert rapid is None or isinstance(rapid, (int, str, type(None)))
+        assert blitz is None or isinstance(blitz, (int, str, type(None)))
+
+
+class TestFormatOutput:
+    """Tests for rating output formatting."""
+    
+    def test_format_output_all_ratings(self):
+        """Test formatting output with all three ratings."""
+        output = fide_scraper.format_ratings_output(2500, 2450, 2400)
+        assert "Standard: 2500" in output
+        assert "Rapid: 2450" in output
+        assert "Blitz: 2400" in output
+    
+    def test_format_output_with_unrated_blitz(self):
+        """Test formatting output with unrated blitz."""
+        output = fide_scraper.format_ratings_output(2500, 2450, None)
+        assert "Standard: 2500" in output
+        assert "Rapid: 2450" in output
+        assert "Blitz: Unrated" in output
+    
+    def test_format_output_all_unrated(self):
+        """Test formatting output when all ratings are unrated."""
+        output = fide_scraper.format_ratings_output(None, None, None)
+        assert "Standard: Unrated" in output
+        assert "Rapid: Unrated" in output
+        assert "Blitz: Unrated" in output

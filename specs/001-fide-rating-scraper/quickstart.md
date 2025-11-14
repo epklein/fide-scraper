@@ -41,12 +41,21 @@ python fide_scraper.py 538026660
 ```
 Standard: 2500
 Rapid: 2450
+Blitz: 2400
 ```
 
 **Player with missing rating**:
 ```
 Standard: 2500
+Rapid: 2450
+Blitz: Unrated
+```
+
+**Player with multiple missing ratings**:
+```
+Standard: 2500
 Rapid: Unrated
+Blitz: Unrated
 ```
 
 **Error - Invalid FIDE ID**:
