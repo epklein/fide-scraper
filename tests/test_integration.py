@@ -136,3 +136,64 @@ class TestEdgeCases:
         assert "Standard: 2500" in output
         assert "Rapid: 2450" in output
         assert "Blitz: Unrated" in output
+
+
+@pytest.mark.integration
+class TestBatchProcessing:
+    """Integration tests for batch processing functionality."""
+    
+    def test_end_to_end_batch_processing(self, tmp_path):
+        """Test end-to-end batch processing with real FIDE IDs."""
+        # Create input file with valid FIDE IDs
+        input_file = tmp_path / "fide_ids.txt"
+        input_file.write_text("538026660\n2016892\n")
+        
+        # Read FIDE IDs from file
+        fide_ids = fide_scraper.read_fide_ids_from_file(str(input_file))
+        assert len(fide_ids) == 2
+        
+        # Process batch
+        results, errors = fide_scraper.process_batch(fide_ids)
+        
+        # Should have results
+        assert len(results) > 0
+        
+        # Generate output filename
+        output_filename = fide_scraper.generate_output_filename()
+        assert output_filename.endswith('.csv')
+        
+        # Write CSV output
+        output_file = tmp_path / output_filename
+        fide_scraper.write_csv_output(str(output_file), results)
+        
+        # Verify CSV file exists and has content
+        assert output_file.exists()
+        content = output_file.read_text(encoding='utf-8')
+        assert 'FIDE ID,Player Name,Standard,Rapid,Blitz' in content
+        
+        # Verify console output
+        console_output = fide_scraper.format_console_output(results)
+        assert 'FIDE ID' in console_output
+        assert 'Player Name' in console_output
+    
+    def test_batch_processing_mixed_valid_invalid(self, tmp_path):
+        """Test batch processing with mixed valid and invalid FIDE IDs."""
+        # Create input file with mixed IDs
+        input_file = tmp_path / "fide_ids.txt"
+        input_file.write_text("538026660\ninvalid_id\n2016892\n99999999\n")
+        
+        # Read FIDE IDs from file
+        fide_ids = fide_scraper.read_fide_ids_from_file(str(input_file))
+        assert len(fide_ids) == 4
+        
+        # Process batch
+        results, errors = fide_scraper.process_batch(fide_ids)
+        
+        # Should have some results (valid IDs)
+        assert len(results) > 0
+        
+        # Should have some errors (invalid IDs)
+        assert len(errors) > 0
+        
+        # Should continue processing after errors
+        assert len(results) + len(errors) >= 2  # At least processed some
