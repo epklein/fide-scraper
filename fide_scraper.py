@@ -6,12 +6,16 @@ A simple script to retrieve chess player ratings from the FIDE website.
 """
 
 import sys
+import os
 import requests
 from bs4 import BeautifulSoup
 from typing import Optional, Tuple, List, Dict
 import csv
 from datetime import date
 import argparse
+
+# Constants
+OUTPUT_FILENAME = "fide_ratings.csv"
 
 
 def validate_fide_id(fide_id: str) -> bool:
@@ -291,34 +295,48 @@ def read_fide_ids_from_file(filepath: str) -> List[str]:
     return fide_ids
 
 
-def generate_output_filename() -> str:
-    """
-    Generate date-stamped output filename for CSV file.
-    
-    Returns:
-        Filename string in format: fide_ratings_YYYY-MM-DD.csv (ISO 8601 format)
-    """
-    today = date.today().isoformat()
-    return f"fide_ratings_{today}.csv"
-
-
 def write_csv_output(filename: str, player_profiles: List[Dict]) -> None:
     """
-    Write player profiles to CSV file.
-    
+    Write player profiles to CSV file, replacing same-day entries and preserving older entries.
+
+    Creates file with headers if it doesn't exist. If file exists, removes any entries from today
+    and appends new entries. This ensures that running the script multiple times on the same day
+    replaces previous data while preserving history from previous dates.
+
+    Each entry includes the current date as the first column.
+
     Args:
         filename: Path to output CSV file
         player_profiles: List of dictionaries with keys: FIDE ID, Player Name, Standard, Rapid, Blitz
     """
-    fieldnames = ['FIDE ID', 'Player Name', 'Standard', 'Rapid', 'Blitz']
-    
+    fieldnames = ['Date', 'FIDE ID', 'Player Name', 'Standard', 'Rapid', 'Blitz']
+    today = date.today().isoformat()
+    file_exists = os.path.exists(filename)
+
+    # If file exists, read it and filter out today's entries
+    existing_rows = []
+    if file_exists:
+        with open(filename, 'r', newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                # Keep entries from previous dates, exclude today's entries
+                if row.get('Date') != today:
+                    existing_rows.append(row)
+
+    # Write the file with preserved older entries and new entries for today
     with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
-        
+
+        # Write preserved older entries
+        for row in existing_rows:
+            writer.writerow(row)
+
+        # Write new entries for today
         for profile in player_profiles:
             # Convert None values to empty strings for CSV
             row = {
+                'Date': today,
                 'FIDE ID': profile.get('FIDE ID', ''),
                 'Player Name': profile.get('Player Name', ''),
                 'Standard': profile.get('Standard', '') if profile.get('Standard') is not None else '',
@@ -331,38 +349,41 @@ def write_csv_output(filename: str, player_profiles: List[Dict]) -> None:
 def format_console_output(player_profiles: List[Dict]) -> str:
     """
     Format player profiles for console output in tabular format.
-    
+
     Args:
         player_profiles: List of dictionaries with player data
-        
+
     Returns:
         Formatted string for console display
     """
     if not player_profiles:
         return "No player data to display.\n"
-    
+
+    today = date.today().isoformat()
+
     # Header
-    header = "FIDE ID      Player Name          Standard  Rapid  Blitz"
+    header = f"Date         FIDE ID      Player Name                              Standard  Rapid  Blitz"
     separator = "-" * len(header)
-    
+
     lines = [header, separator]
-    
+
     # Format each row
     for profile in player_profiles:
+        date_str = today
         fide_id = profile.get('FIDE ID', '')
         player_name = profile.get('Player Name', '') or 'Unknown'
         standard = profile.get('Standard', '') if profile.get('Standard') is not None else 'Unrated'
         rapid = profile.get('Rapid', '') if profile.get('Rapid') is not None else 'Unrated'
         blitz = profile.get('Blitz', '') if profile.get('Blitz') is not None else 'Unrated'
-        
+
         # Truncate long names
-        if len(player_name) > 20:
-            player_name = player_name[:17] + "..."
-        
+        if len(player_name) > 40:
+            player_name = player_name[:37] + "..."
+
         # Format row with alignment
-        row = f"{fide_id:<12} {player_name:<20} {str(standard):<9} {str(rapid):<6} {str(blitz)}"
+        row = f"{date_str:<12} {fide_id:<12} {player_name:<40} {str(standard):<9} {str(rapid):<6} {str(blitz)}"
         lines.append(row)
-    
+
     return "\n".join(lines) + "\n"
 
 
@@ -480,12 +501,9 @@ def main():
             
             # Process batch
             results, errors = process_batch(fide_ids)
-            
-            # Generate output filename
-            output_filename = generate_output_filename()
-            
+
             # Write CSV output
-            write_csv_output(output_filename, results)
+            write_csv_output(OUTPUT_FILENAME, results)
             
             # Display console output
             console_output = format_console_output(results)
@@ -499,7 +517,7 @@ def main():
             # Print summary
             success_count = len(results)
             error_count = len(errors)
-            print(f"Output written to: {output_filename}")
+            print(f"Output written to: {OUTPUT_FILENAME}")
             print(f"Processed {success_count} IDs successfully, {error_count} errors")
             
             # Exit code: 0 if at least one success, 1 if all failed

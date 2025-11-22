@@ -147,32 +147,37 @@ class TestBatchProcessing:
         # Create input file with valid FIDE IDs
         input_file = tmp_path / "fide_ids.txt"
         input_file.write_text("538026660\n2016892\n")
-        
+
         # Read FIDE IDs from file
         fide_ids = fide_scraper.read_fide_ids_from_file(str(input_file))
         assert len(fide_ids) == 2
-        
+
         # Process batch
         results, errors = fide_scraper.process_batch(fide_ids)
-        
+
         # Should have results
         assert len(results) > 0
-        
-        # Generate output filename
-        output_filename = fide_scraper.generate_output_filename()
-        assert output_filename.endswith('.csv')
-        
+
+        # Get output filename
+        output_filename = fide_scraper.OUTPUT_FILENAME
+        assert output_filename == "fide_ratings.csv"
+
         # Write CSV output
         output_file = tmp_path / output_filename
         fide_scraper.write_csv_output(str(output_file), results)
-        
+
         # Verify CSV file exists and has content
         assert output_file.exists()
         content = output_file.read_text(encoding='utf-8')
-        assert 'FIDE ID,Player Name,Standard,Rapid,Blitz' in content
-        
+        assert 'Date,FIDE ID,Player Name,Standard,Rapid,Blitz' in content
+        # Verify date is present
+        from datetime import date
+        today = date.today().isoformat()
+        assert today in content
+
         # Verify console output
         console_output = fide_scraper.format_console_output(results)
+        assert 'Date' in console_output
         assert 'FIDE ID' in console_output
         assert 'Player Name' in console_output
     

@@ -74,7 +74,7 @@ Processing FIDE IDs from file: fide_ids.txt
 FIDE ID      Player Name          Standard  Rapid  Blitz
 ----------------------------------------------------------
 1503014      Magnus Carlsen       2830      2780   2760
-2016192      Hikaru Nakamura       2758      2800   2790
+2016192      Hikaru Nakamura      2758      2800   2790
 
 Output written to: fide_ratings_2025-01-27.csv
 Processed 2 IDs successfully, 0 errors
@@ -101,7 +101,7 @@ FIDE ID      Player Name          Standard  Rapid  Blitz
 ----------------------------------------------------------
 1503014      Magnus Carlsen       2830      2780   2760
 Error: Invalid FIDE ID format: abc123 (skipped)
-2016192      Hikaru Nakamura       2758      2800   2790
+2016192      Hikaru Nakamura      2758      2800   2790
 Error: Player not found (FIDE ID: 99999999) (skipped)
 
 Output written to: fide_ratings_2025-01-27.csv

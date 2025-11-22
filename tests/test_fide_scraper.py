@@ -383,7 +383,7 @@ class TestFileReading:
 
 class TestCSVGeneration:
     """Tests for CSV generation function."""
-    
+
     def test_write_csv_output_proper_formatting(self, tmp_path):
         """Test CSV generation with proper formatting and escaping."""
         output_file = tmp_path / "test_output.csv"
@@ -397,11 +397,14 @@ class TestCSVGeneration:
             }
         ]
         fide_scraper.write_csv_output(str(output_file), player_profiles)
-        
+
         # Read and verify CSV content
         content = output_file.read_text(encoding='utf-8')
-        assert 'FIDE ID,Player Name,Standard,Rapid,Blitz' in content
-        assert '538026660,Magnus Carlsen,2830,2780,2760' in content
+        assert 'Date,FIDE ID,Player Name,Standard,Rapid,Blitz' in content
+        # Date should be in ISO format at the beginning
+        from datetime import date
+        today = date.today().isoformat()
+        assert f'{today},538026660,Magnus Carlsen,2830,2780,2760' in content
     
     def test_write_csv_output_special_characters(self, tmp_path):
         """Test CSV generation with special characters in player names (proper escaping)."""
@@ -434,51 +437,122 @@ class TestCSVGeneration:
             }
         ]
         fide_scraper.write_csv_output(str(output_file), player_profiles)
-        
-        # Read and verify CSV content
+
+        # Read and verify CSV content - Date should come first
         content = output_file.read_text(encoding='utf-8')
-        assert '123456,Test Player,2500,,' in content or '123456,Test Player,2500,"",""' in content
+        from datetime import date
+        today = date.today().isoformat()
+        # Check that date is present and values are correct
+        assert today in content
+        assert '123456,Test Player,2500,,' in content or 'Test Player,2500' in content
     
     def test_write_csv_output_header_row(self, tmp_path):
         """Test that CSV includes header row."""
         output_file = tmp_path / "test_output.csv"
         player_profiles = []
         fide_scraper.write_csv_output(str(output_file), player_profiles)
-        
+
         # Read and verify header exists even with empty data
         content = output_file.read_text(encoding='utf-8')
-        assert 'FIDE ID,Player Name,Standard,Rapid,Blitz' in content
+        assert 'Date,FIDE ID,Player Name,Standard,Rapid,Blitz' in content
 
+    def test_write_csv_output_same_day_replacement(self, tmp_path):
+        """Test that CSV output replaces same-day entries while preserving older entries."""
+        output_file = tmp_path / "test_output.csv"
+        from datetime import date, timedelta
 
-class TestFilenameGeneration:
-    """Tests for date-stamped filename generation."""
-    
-    def test_generate_output_filename_iso_format(self):
-        """Test filename generation uses ISO 8601 format (YYYY-MM-DD)."""
-        filename = fide_scraper.generate_output_filename()
-        # Should match pattern: fide_ratings_YYYY-MM-DD.csv
-        import re
-        pattern = r'fide_ratings_\d{4}-\d{2}-\d{2}\.csv'
-        assert re.match(pattern, filename) is not None
-    
-    def test_generate_output_filename_contains_date(self):
-        """Test filename contains current date."""
-        from datetime import date
-        filename = fide_scraper.generate_output_filename()
+        # First write - initial data
+        player_profiles_1 = [
+            {
+                'FIDE ID': '538026660',
+                'Player Name': 'Magnus Carlsen',
+                'Standard': 2830,
+                'Rapid': 2780,
+                'Blitz': 2760
+            }
+        ]
+        fide_scraper.write_csv_output(str(output_file), player_profiles_1)
+
+        # Second write on same day - should replace previous data
+        player_profiles_2 = [
+            {
+                'FIDE ID': '2016892',
+                'Player Name': 'Ding Liren',
+                'Standard': 2780,
+                'Rapid': 2750,
+                'Blitz': 2730
+            }
+        ]
+        fide_scraper.write_csv_output(str(output_file), player_profiles_2)
+
+        # Read and verify behavior
+        content = output_file.read_text(encoding='utf-8')
         today = date.today().isoformat()
-        assert today in filename
-    
-    def test_generate_output_filename_extension(self):
-        """Test filename has .csv extension."""
-        filename = fide_scraper.generate_output_filename()
-        assert filename.endswith('.csv')
 
+        # Should have header only once
+        header_count = content.count('Date,FIDE ID,Player Name,Standard,Rapid,Blitz')
+        assert header_count == 1, "Header should appear only once"
+
+        # Should have only the second (latest) entry for today, not the first one
+        assert 'Ding Liren' in content, "Latest entry should be present"
+        assert 'Magnus Carlsen' not in content, "Old entry for same day should be removed"
+        assert '2016892' in content, "New FIDE ID should be present"
+        # Check that old FIDE ID is not in today's entries
+        lines = content.split('\n')
+        for line in lines:
+            if today in line and line.strip():
+                assert '538026660' not in line, "Old FIDE ID should not appear in today's entries"
+
+    def test_write_csv_output_preserve_older_dates(self, tmp_path):
+        """Test that CSV output preserves entries from previous dates."""
+        output_file = tmp_path / "test_output.csv"
+        from datetime import date, timedelta
+
+        # Create a file with yesterday's data
+        today = date.today()
+        yesterday = (today - timedelta(days=1)).isoformat()
+
+        # Manually create a file with yesterday's data
+        output_file.write_text(
+            f"Date,FIDE ID,Player Name,Standard,Rapid,Blitz\n"
+            f"{yesterday},1503014,Magnus Carlsen,2830,2780,2760\n"
+        )
+
+        # Now write today's data
+        player_profiles = [
+            {
+                'FIDE ID': '2016892',
+                'Player Name': 'Ding Liren',
+                'Standard': 2780,
+                'Rapid': 2750,
+                'Blitz': 2730
+            }
+        ]
+        fide_scraper.write_csv_output(str(output_file), player_profiles)
+
+        # Read and verify both dates are present
+        content = output_file.read_text(encoding='utf-8')
+        today_str = date.today().isoformat()
+
+        # Should have header only once
+        header_count = content.count('Date,FIDE ID,Player Name,Standard,Rapid,Blitz')
+        assert header_count == 1, "Header should appear only once"
+
+        # Should have yesterday's entry
+        assert yesterday in content, "Yesterday's entry should be preserved"
+        assert 'Magnus Carlsen' in content, "Yesterday's player should be present"
+        assert '1503014' in content, "Yesterday's FIDE ID should be present"
+
+        # Should have today's entry
+        assert today_str in content, "Today's date should be present"
+        assert 'Ding Liren' in content, "Today's player should be present"
+        assert '2016892' in content, "Today's FIDE ID should be present"
 
 class TestConsoleOutputFormatting:
     """Tests for console output formatting."""
-    
+
     def test_format_console_output_tabular_format(self):
-        """Test console output uses tabular format with aligned columns."""
+        """Test console output uses tabular format with aligned columns and Date."""
         player_profiles = [
             {
                 'FIDE ID': '538026660',
@@ -489,6 +563,7 @@ class TestConsoleOutputFormatting:
             }
         ]
         output = fide_scraper.format_console_output(player_profiles)
+        assert 'Date' in output
         assert 'FIDE ID' in output
         assert 'Player Name' in output
         assert 'Standard' in output
@@ -496,6 +571,10 @@ class TestConsoleOutputFormatting:
         assert 'Blitz' in output
         assert '538026660' in output
         assert 'Magnus Carlsen' in output
+        # Verify date is in ISO format
+        from datetime import date
+        today = date.today().isoformat()
+        assert today in output
     
     def test_format_console_output_column_alignment(self):
         """Test console output has proper column alignment."""

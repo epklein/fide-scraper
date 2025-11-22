@@ -42,28 +42,6 @@ Rapid: 2780
 Blitz: 2760
 ```
 
-**Player with missing rating**:
-```
-Standard: 2500
-Rapid: 2450
-Blitz: Unrated
-```
-
-**Error - Invalid FIDE ID**:
-```
-Error: Invalid FIDE ID format. Must be numeric (4-10 digits).
-```
-
-**Error - Player not found**:
-```
-Error: Player not found (FIDE ID: 99999999)
-```
-
-**Error - Network issue**:
-```
-Error: Unable to connect to FIDE website. Please check your internet connection.
-```
-
 ### Batch Processing Mode
 
 Process multiple FIDE IDs from a file and output results to both a CSV file and the console.
@@ -104,51 +82,38 @@ python fide_scraper.py -f fide_ids.txt
 ```
 Processing FIDE IDs from file: fide_ids.txt
 
-FIDE ID      Player Name          Standard  Rapid  Blitz
-----------------------------------------------------------
-1503014      Magnus Carlsen       2830      2780   2760
-2016192      Hikaru Nakamura       2758      2800   2790
+Date         FIDE ID      Player Name          Standard  Rapid  Blitz
+--------------------------------------------------------------------
+2025-01-27   1503014      Magnus Carlsen       2830      2780   2760
+2025-01-27   2016192      Hikaru Nakamura      2758      2800   2790
 
-Output written to: fide_ratings_2025-01-27.csv
+Output written to: fide_ratings.csv
 Processed 2 IDs successfully, 0 errors
 ```
 
 **CSV Output File**:
-- **Filename**: `fide_ratings_YYYY-MM-DD.csv` (includes current date in ISO 8601 format)
+- **Filename**: `fide_ratings.csv` (persistent single file)
 - **Location**: Current working directory
 - **Format**: Standard CSV with proper escaping for special characters
-- **Columns**: FIDE ID, Player Name, Standard, Rapid, Blitz
+- **Columns**: Date, FIDE ID, Player Name, Standard, Rapid, Blitz
+- **Behavior**: Runs on the same day replace previous data for that day; runs on different dates preserve history
 
 **Example CSV Content**:
 ```csv
-FIDE ID,Player Name,Standard,Rapid,Blitz
-1503014,Magnus Carlsen,2830,2780,2760
-2016192,Hikaru Nakamura,2758,2800,2790
-```
-
-**Error Handling in Batch Mode**:
-The script continues processing even when individual FIDE IDs fail:
-
-```
-Processing FIDE IDs from file: fide_ids.txt
-
-FIDE ID      Player Name          Standard  Rapid  Blitz
-----------------------------------------------------------
-1503014      Magnus Carlsen       2830      2780   2760
-Error: Invalid FIDE ID format: abc123 (skipped)
-2016192      Hikaru Nakamura       2758      2800   2790
-Error: Player not found (FIDE ID: 99999999) (skipped)
-
-Output written to: fide_ratings_2025-01-27.csv
-Processed 2 IDs successfully, 2 errors
+Date,FIDE ID,Player Name,Standard,Rapid,Blitz
+2025-01-27,1503014,Magnus Carlsen,2830,2780,2760
+2025-01-27,2016192,Hikaru Nakamura,2758,2800,2790
+2025-01-28,1503014,Magnus Carlsen,2831,2781,2761
+2025-01-28,2016192,Hikaru Nakamura,2759,2801,2791
 ```
 
 **Batch Processing Features**:
 - Processes all valid FIDE IDs in the file
 - Skips invalid IDs and continues processing
 - Handles network errors gracefully (continues with remaining IDs)
-- Generates CSV file with date-stamped filename
-- Displays results in both CSV and console
+- Appends results to single persistent CSV file (fide_ratings.csv)
+- Preserves complete history of all rating retrievals across multiple runs
+- Displays results in the console
 - Provides summary of successful and failed processing
 
 ## Finding a FIDE ID
@@ -164,14 +129,17 @@ FIDE IDs are typically 6-8 digit numbers (4-10 digits valid).
 
 ### CSV File Format
 
-When using batch processing mode, the script generates a CSV file with the following characteristics:
+When using batch processing mode, the script appends data to a persistent CSV file with the following characteristics:
 
-- **Filename**: `fide_ratings_YYYY-MM-DD.csv` (date in ISO 8601 format)
+- **Filename**: `fide_ratings.csv` (always the same file)
+- **Location**: Current working directory
 - **Encoding**: UTF-8
 - **Delimiter**: Comma
-- **Header Row**: Yes (FIDE ID, Player Name, Standard, Rapid, Blitz)
+- **Header Row**: Yes (Date, FIDE ID, Player Name, Standard, Rapid, Blitz)
 - **Special Characters**: Automatically escaped (commas in names are quoted)
 - **Missing Ratings**: Empty cell for missing/unrated ratings
+- **History**: New entries are appended on subsequent runs; all previous entries are preserved
+- **Date Format**: ISO 8601 (YYYY-MM-DD) for each entry
 
 The CSV file can be opened in:
 - Microsoft Excel
@@ -180,6 +148,18 @@ The CSV file can be opened in:
 - Text editors
 
 **Note**: If opening in Excel, you may need to specify UTF-8 encoding during import.
+
+### File Behavior
+
+The script manages `fide_ratings.csv` intelligently to balance history preservation with fresh data:
+
+**First Run**:
+- Creates `fide_ratings.csv` with headers and initial data
+
+**Subsequent Runs**:
+- If you run the script **on a different date**: New entries are appended, preserving all previous entries
+- If you run the script **on the same day**: Previous data for that day is replaced with new data
+- This ensures you always have the latest information for each date, while maintaining complete history across different dates
 
 ## Testing
 
