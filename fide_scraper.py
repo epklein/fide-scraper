@@ -13,9 +13,14 @@ from typing import Optional, Tuple, List, Dict
 import csv
 from datetime import date
 import argparse
+from dotenv import load_dotenv
 
-# Constants
-OUTPUT_FILENAME = "fide_ratings.csv"
+# Load environment variables from .env file
+load_dotenv()
+
+# Constants and environment-based configuration
+OUTPUT_FILENAME = os.getenv('FIDE_OUTPUT_FILE', 'fide_ratings.csv')
+INPUT_FILENAME = os.getenv('FIDE_INPUT_FILE', 'fide_ids.txt')
 
 
 def validate_fide_id(fide_id: str) -> bool:
@@ -472,60 +477,67 @@ def main():
     """Main entry point for the script."""
     parser = argparse.ArgumentParser(
         description='FIDE Rating Scraper - Retrieve chess player ratings from FIDE website',
-        formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument(
-        '--file', '-f',
-        type=str,
-        help='Path to input file containing FIDE IDs (one per line) for batch processing'
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Batch Processing Mode (default):
+  Reads FIDE IDs from the file specified in FIDE_INPUT_FILE environment variable
+  (default: fide_ids.txt) and writes results to FIDE_OUTPUT_FILE (default: fide_ratings.csv).
+
+  Configure these paths by creating a .env file or setting environment variables.
+  See .env.example for configuration options.
+
+Single Player Mode:
+  python fide_scraper.py <FIDE_ID>
+  Retrieves rating for a single FIDE ID and prints to console.
+        """
     )
     parser.add_argument(
         'fide_id',
         nargs='?',
         help='FIDE ID of the player to look up (for single player mode)'
     )
-    
+
     args = parser.parse_args()
-    
-    # Batch processing mode
-    if args.file:
+
+    # Batch processing mode (default)
+    if not args.fide_id:
         try:
-            # Read FIDE IDs from file
-            fide_ids = read_fide_ids_from_file(args.file)
-            
+            # Read FIDE IDs from configured input file
+            fide_ids = read_fide_ids_from_file(INPUT_FILENAME)
+
             if not fide_ids:
                 print("Error: Input file is empty or contains no valid FIDE IDs.", file=sys.stderr)
                 sys.exit(2)
-            
-            print(f"Processing FIDE IDs from file: {args.file}\n")
-            
+
+            print(f"Processing FIDE IDs from file: {INPUT_FILENAME}\n")
+
             # Process batch
             results, errors = process_batch(fide_ids)
 
             # Write CSV output
             write_csv_output(OUTPUT_FILENAME, results)
-            
+
             # Display console output
             console_output = format_console_output(results)
             print(console_output)
-            
+
             # Print errors to stderr
             if errors:
                 for error in errors:
                     print(f"Error: {error}", file=sys.stderr)
-            
+
             # Print summary
             success_count = len(results)
             error_count = len(errors)
             print(f"Output written to: {OUTPUT_FILENAME}")
             print(f"Processed {success_count} IDs successfully, {error_count} errors")
-            
+
             # Exit code: 0 if at least one success, 1 if all failed
             if success_count > 0:
                 sys.exit(0)
             else:
                 sys.exit(1)
-                
+
         except FileNotFoundError as e:
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(2)

@@ -158,12 +158,8 @@ class TestBatchProcessing:
         # Should have results
         assert len(results) > 0
 
-        # Get output filename
-        output_filename = fide_scraper.OUTPUT_FILENAME
-        assert output_filename == "fide_ratings.csv"
-
         # Write CSV output
-        output_file = tmp_path / output_filename
+        output_file = tmp_path / "fide_ratings.csv"
         fide_scraper.write_csv_output(str(output_file), results)
 
         # Verify CSV file exists and has content

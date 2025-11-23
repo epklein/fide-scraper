@@ -3,7 +3,7 @@
 **Feature Branch**: `002-batch-fide-ratings`  
 **Created**: 2025-01-27  
 **Status**: Draft  
-**Input**: User description: "I want the script to be able to handle a file with a list of FIDE IDs, one per line. When the file is passed to the script, it will output a single CSV file (fide_ratings.csv) containing the date, FIDE ID, Player Name, Standard, Rapid, and Blitz ratings. The script replaces data from the same day but maintains history across different dates. The script should also print this content in the console"
+**Input**: User description: "I want the script to handle a file with a list of FIDE IDs (one per line), configured via environment variables. The script reads from FIDE_INPUT_FILE (default: fide_ids.txt) and outputs to FIDE_OUTPUT_FILE (default: fide_ratings.csv), both configurable in a .env file. The output CSV contains the date, FIDE ID, Player Name, Standard, Rapid, and Blitz ratings. The script replaces data from the same day but maintains history across different dates. The script should also print this content in the console"
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -53,23 +53,26 @@ A user wants to retrieve ratings for multiple chess players at once by providing
 
 ### Functional Requirements
 
-- **FR-001**: Script MUST accept a file path as input containing FIDE IDs (one per line)
-- **FR-002**: Script MUST read and parse FIDE IDs from the input file, processing each line as a separate FIDE ID
-- **FR-003**: Script MUST generate a single output CSV file named fide_ratings.csv with columns: Date, FIDE ID, Player Name, Standard, Rapid, Blitz (Date as first column)
-- **FR-004**: Script MUST handle new player data intelligently: replace entries from the same date, preserve entries from previous dates
-- **FR-005**: Script MUST include the current date (YYYY-MM-DD format) as the first column value for each entry
-- **FR-006**: Script MUST create the fide_ratings.csv file with headers if it doesn't exist
-- **FR-007**: Script MUST write all successfully retrieved player data to the CSV file
-- **FR-008**: Script MUST display the same data in the console as it writes to the CSV file
-- **FR-009**: Script MUST extract and include player name for each FIDE ID in both CSV and console output
-- **FR-010**: Script MUST handle invalid FIDE IDs in the input file gracefully (skip or mark as error) without stopping batch processing
-- **FR-011**: Script MUST handle empty lines in the input file by skipping them
-- **FR-012**: Script MUST handle cases where a player exists but one or more ratings are missing/unrated (include appropriate placeholder in CSV and console)
-- **FR-013**: Script MUST validate each FIDE ID format before attempting to scrape
-- **FR-014**: Script MUST handle network errors for individual FIDE IDs without stopping the entire batch (continue processing remaining IDs)
-- **FR-015**: Script MUST handle cases where a FIDE ID points to a non-existent player (skip or mark as error) without stopping batch processing
-- **FR-016**: Script MUST provide meaningful error messages for file-related errors (file not found, permission denied, etc.)
-- **FR-017**: Script MUST ensure CSV output is properly formatted with correct escaping for special characters (e.g., commas in player names)
+- **FR-001**: Script MUST load configuration from .env file if it exists, using sensible defaults if not present
+- **FR-002**: Script MUST read input file path from FIDE_INPUT_FILE environment variable (default: fide_ids.txt)
+- **FR-003**: Script MUST read output file path from FIDE_OUTPUT_FILE environment variable (default: fide_ratings.csv)
+- **FR-004**: Script MUST accept a file containing FIDE IDs (one per line) as specified in configuration
+- **FR-005**: Script MUST read and parse FIDE IDs from the input file, processing each line as a separate FIDE ID
+- **FR-006**: Script MUST generate a single output CSV file with columns: Date, FIDE ID, Player Name, Standard, Rapid, Blitz (Date as first column)
+- **FR-007**: Script MUST handle new player data intelligently: replace entries from the same date, preserve entries from previous dates
+- **FR-008**: Script MUST include the current date (YYYY-MM-DD format) as the first column value for each entry
+- **FR-009**: Script MUST create the output CSV file with headers if it doesn't exist
+- **FR-010**: Script MUST write all successfully retrieved player data to the CSV file
+- **FR-011**: Script MUST display the same data in the console as it writes to the CSV file
+- **FR-012**: Script MUST extract and include player name for each FIDE ID in both CSV and console output
+- **FR-013**: Script MUST handle invalid FIDE IDs in the input file gracefully (skip or mark as error) without stopping batch processing
+- **FR-014**: Script MUST handle empty lines in the input file by skipping them
+- **FR-015**: Script MUST handle cases where a player exists but one or more ratings are missing/unrated (include appropriate placeholder in CSV and console)
+- **FR-016**: Script MUST validate each FIDE ID format before attempting to scrape
+- **FR-017**: Script MUST handle network errors for individual FIDE IDs without stopping the entire batch (continue processing remaining IDs)
+- **FR-018**: Script MUST handle cases where a FIDE ID points to a non-existent player (skip or mark as error) without stopping batch processing
+- **FR-019**: Script MUST provide meaningful error messages for file-related errors (file not found, permission denied, etc.)
+- **FR-020**: Script MUST ensure CSV output is properly formatted with correct escaping for special characters (e.g., commas in player names)
 
 ### Key Entities *(include if feature involves data)*
 

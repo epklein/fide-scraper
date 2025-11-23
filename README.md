@@ -20,12 +20,23 @@ I had to step in during the research phase to provide HTML examples that support
 
    Or install manually:
    ```bash
-   pip install requests beautifulsoup4
+   pip install requests beautifulsoup4 python-dotenv
+   ```
+
+2. **Configure batch processing (optional)**:
+   ```bash
+   cp .env.example .env
+   ```
+
+   Edit `.env` to customize input/output file paths (defaults are used if `.env` doesn't exist):
+   ```env
+   FIDE_INPUT_FILE=fide_ids.txt
+   FIDE_OUTPUT_FILE=fide_ratings.csv
    ```
 
 ## Usage
 
-The script supports two modes: **Single FIDE ID mode** (for one player) and **Batch Processing mode** (for multiple players from a file).
+The script supports two modes: **Batch Processing mode** (default, for multiple players from a file) and **Single FIDE ID mode** (for one player).
 
 ### Single FIDE ID Mode
 
@@ -67,13 +78,18 @@ Create a text file containing FIDE IDs, one per line:
 
 #### Step 2: Run Batch Processing
 
+Simply run the script without arguments (it will use the configured input file):
+
 ```bash
-python fide_scraper.py --file fide_ids.txt
+python fide_scraper.py
 ```
 
-Or using short form:
-```bash
-python fide_scraper.py -f fide_ids.txt
+The script will read from the file specified in `FIDE_INPUT_FILE` environment variable (default: `fide_ids.txt`) and write to `FIDE_OUTPUT_FILE` (default: `fide_ratings.csv`).
+
+To customize file paths, create/edit a `.env` file in the project root:
+```env
+FIDE_INPUT_FILE=my_players.txt
+FIDE_OUTPUT_FILE=ratings_history.csv
 ```
 
 #### Step 3: View Results
@@ -151,15 +167,59 @@ The CSV file can be opened in:
 
 ### File Behavior
 
-The script manages `fide_ratings.csv` intelligently to balance history preservation with fresh data:
+The script manages the output CSV file intelligently to balance history preservation with fresh data:
 
 **First Run**:
-- Creates `fide_ratings.csv` with headers and initial data
+- Creates the output file (default: `fide_ratings.csv`) with headers and initial data
 
 **Subsequent Runs**:
 - If you run the script **on a different date**: New entries are appended, preserving all previous entries
 - If you run the script **on the same day**: Previous data for that day is replaced with new data
 - This ensures you always have the latest information for each date, while maintaining complete history across different dates
+
+## Configuration
+
+### Environment Variables
+
+The script uses environment variables to configure input and output file paths:
+
+- **`FIDE_INPUT_FILE`**: Path to the input file containing FIDE IDs (default: `fide_ids.txt`)
+- **`FIDE_OUTPUT_FILE`**: Path to the output CSV file (default: `fide_ratings.csv`)
+
+### Setting Environment Variables
+
+#### Option 1: `.env` File (Recommended)
+
+Create a `.env` file in the project root:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your preferred paths:
+
+```env
+FIDE_INPUT_FILE=my_fide_ids.txt
+FIDE_OUTPUT_FILE=my_ratings_history.csv
+```
+
+#### Option 2: Direct Environment Variables
+
+Export variables before running the script:
+
+```bash
+export FIDE_INPUT_FILE=my_fide_ids.txt
+export FIDE_OUTPUT_FILE=my_ratings_history.csv
+python fide_scraper.py
+```
+
+#### Option 3: Command Line (Inline)
+
+```bash
+FIDE_INPUT_FILE=players.txt FIDE_OUTPUT_FILE=ratings.csv python fide_scraper.py
+```
+
+**Note**: If no environment variables are set, the script uses the default filenames: `fide_ids.txt` and `fide_ratings.csv`.
 
 ## Testing
 
