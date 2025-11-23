@@ -50,3 +50,6 @@ Thumbs.db
 
 # Environment variables
 .env
+
+# Local files
+.local/
