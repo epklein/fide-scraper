@@ -1,0 +1,12 @@
+FIDE ID,email
+12345678,alice@example.com
+87654321,bob@example.com
+11111111,
+22222222,charlie@example.com
+33333333,invalid-email
+44444444,dave@example.com
+55555555
+66666666,eve@example.com
+77777777,frank@
+88888888
+99999999,grace@example.com

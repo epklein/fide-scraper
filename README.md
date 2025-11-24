@@ -30,7 +30,7 @@ I had to step in during the research phase to provide HTML examples that support
 
    Edit `.env` to customize input/output file paths (defaults are used if `.env` doesn't exist):
    ```env
-   FIDE_INPUT_FILE=fide_ids.txt
+   FIDE_PLAYERS_FILE=players.csv
    FIDE_OUTPUT_FILE=fide_ratings.csv
    ```
 
@@ -61,13 +61,11 @@ Process multiple FIDE IDs from a file and output results to both a CSV file and 
 
 Create a text file containing FIDE IDs, one per line:
 
-**Example** (`fide_ids.txt`):
+**Example** (`players.csv`):
 ```
-1503014
-538026660
-538020459
-538027038
-538042827
+FIDE ID,email
+1503014,magnus@example.com
+2016192,nakamura@example.com
 ```
 
 **Notes**:
@@ -84,11 +82,11 @@ Simply run the script without arguments (it will use the configured input file):
 python fide_scraper.py
 ```
 
-The script will read from the file specified in `FIDE_INPUT_FILE` environment variable (default: `fide_ids.txt`) and write to `FIDE_OUTPUT_FILE` (default: `fide_ratings.csv`).
+The script will read from the file specified in `FIDE_PLAYERS_FILE` environment variable (default: `players.csv`) and write to `FIDE_OUTPUT_FILE` (default: `fide_ratings.csv`).
 
 To customize file paths, create/edit a `.env` file in the project root:
 ```env
-FIDE_INPUT_FILE=my_players.txt
+FIDE_PLAYERS_FILE=players.csv
 FIDE_OUTPUT_FILE=ratings_history.csv
 ```
 
@@ -147,8 +145,7 @@ FIDE IDs are typically 6-8 digit numbers (4-10 digits valid).
 
 When using batch processing mode, the script appends data to a persistent CSV file with the following characteristics:
 
-- **Filename**: `fide_ratings.csv` (always the same file)
-- **Location**: Current working directory
+- **Filename**: `FIDE_OUTPUT_FILE` (default: `fide_ratings.csv`)
 - **Encoding**: UTF-8
 - **Delimiter**: Comma
 - **Header Row**: Yes (Date, FIDE ID, Player Name, Standard, Rapid, Blitz)
@@ -177,14 +174,75 @@ The script manages the output CSV file intelligently to balance history preserva
 - If you run the script **on the same day**: Previous data for that day is replaced with new data
 - This ensures you always have the latest information for each date, while maintaining complete history across different dates
 
-## Configuration
+## Rating Change Notifications (Email Alerts)
+
+The scraper can automatically send email notifications to players when their ratings change. This feature requires a unified player configuration file.
+
+### Setup
+
+1. **Create `players.csv`** with player data and email preferences:
+   ```csv
+   FIDE ID,email
+   1503014,magnus@example.com
+   2016192,nakamura@example.com
+   ```
+   - **FIDE ID**: Player's FIDE ID (4-10 digits)
+   - **email**: Player's email address (optional - leave empty to opt out of notifications)
+
+2. **Configure environment variables** (in `.env`):
+   ```env
+   FIDE_PLAYERS_FILE=players.csv
+   ADMIN_CC_EMAIL=admin@example.com
+   SMTP_SERVER=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_USERNAME=your-email@gmail.com
+   SMTP_PASSWORD=your-app-password
+   ```
+
+### Features
+
+- **Automatic Notifications**: Emails sent when ratings change (any of Standard, Rapid, or Blitz)
+- **Admin Monitoring**: All notifications CC'd to admin email for oversight
+- **Opt-in by Email**: Players with empty email field don't receive notifications
+- **All Players Tracked**: Ratings tracked for all players, notifications sent only to those with email configured
+- **Graceful Error Handling**: Missing or misconfigured SMTP doesn't crash the scraper
+- **Detailed Logging**: All email send attempts are logged for debugging
+
+### Example
+
+If player with FIDE ID 12345678 has rating change from 2440 → 2450 (Standard rating), they receive:
+
+**Subject**: Your FIDE Rating Update - Alice Smith
+
+**Body**:
+```
+Dear Alice,
+
+Your FIDE ratings have been updated:
+
+Standard Rating: 2440 → 2450 [CHANGED]
+Rapid Rating: 2300 → 2300
+Blitz Rating: 2100 → 2100
+
+Last Updated: 2025-11-23
+```
+
+### Configuration
 
 ### Environment Variables
 
-The script uses environment variables to configure input and output file paths:
+The script uses environment variables to configure input, output, and email settings:
 
-- **`FIDE_INPUT_FILE`**: Path to the input file containing FIDE IDs (default: `fide_ids.txt`)
+#### Input/Output Files
+- **`FIDE_PLAYERS_FILE`**: Path to unified player data file with emails (default: `players.csv`)
 - **`FIDE_OUTPUT_FILE`**: Path to the output CSV file (default: `fide_ratings.csv`)
+
+#### Email Notifications
+- **`ADMIN_CC_EMAIL`**: Administrator email for CC'd copies (optional)
+- **`SMTP_SERVER`**: SMTP server address (default: `localhost`)
+- **`SMTP_PORT`**: SMTP server port (default: `587`)
+- **`SMTP_USERNAME`**: SMTP authentication username (optional)
+- **`SMTP_PASSWORD`**: SMTP authentication password (optional)
 
 ### Setting Environment Variables
 
@@ -199,7 +257,7 @@ cp .env.example .env
 Edit `.env` with your preferred paths:
 
 ```env
-FIDE_INPUT_FILE=my_fide_ids.txt
+FIDE_PLAYER_FILE=my_players.csv
 FIDE_OUTPUT_FILE=my_ratings_history.csv
 ```
 
@@ -208,7 +266,7 @@ FIDE_OUTPUT_FILE=my_ratings_history.csv
 Export variables before running the script:
 
 ```bash
-export FIDE_INPUT_FILE=my_fide_ids.txt
+export FIDE_INPUT_FILE=my_players.csv
 export FIDE_OUTPUT_FILE=my_ratings_history.csv
 python fide_scraper.py
 ```
@@ -216,10 +274,10 @@ python fide_scraper.py
 #### Option 3: Command Line (Inline)
 
 ```bash
-FIDE_INPUT_FILE=players.txt FIDE_OUTPUT_FILE=ratings.csv python fide_scraper.py
+FIDE_PLAYERS_FILE=my_players.csv FIDE_OUTPUT_FILE=my_ratings_history.csv python fide_scraper.py
 ```
 
-**Note**: If no environment variables are set, the script uses the default filenames: `fide_ids.txt` and `fide_ratings.csv`.
+**Note**: If no environment variables are set, the script uses the default filenames: `players.csv` and `fide_ratings.csv`.
 
 ## Testing
 
@@ -256,25 +314,3 @@ pytest tests/test_fide_scraper.py
 - FIDE website structure may have changed
 - Check if the website is accessible in a browser
 - Report the issue if the website structure has changed
-
-### Batch Processing Issues
-
-**"File not found" error**:
-- Verify the file path is correct
-- Use absolute path if relative path doesn't work: `python fide_scraper.py --file /full/path/to/file.txt`
-- Check file permissions (must be readable)
-
-**"Permission denied" error**:
-- Check write permissions in current directory (needed for CSV output)
-- Try running from a different directory with write access
-
-**Empty CSV file**:
-- Check that at least one FIDE ID in the file is valid
-- Verify network connectivity
-- Check console output for error messages
-
-**Special characters in player names**:
-- CSV file uses UTF-8 encoding
-- Special characters should be preserved correctly
-- If viewing in Excel, may need to specify UTF-8 import
-

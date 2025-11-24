@@ -14,39 +14,76 @@ import csv
 from datetime import date
 import argparse
 from dotenv import load_dotenv
+import smtplib
+import logging
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Constants and environment-based configuration
+# Player data file (unified CSV with FIDE IDs and emails)
+FIDE_PLAYERS_FILE = os.getenv('FIDE_PLAYERS_FILE', 'players.csv')
+# Output ratings file (historical ratings)
 OUTPUT_FILENAME = os.getenv('FIDE_OUTPUT_FILE', 'fide_ratings.csv')
-INPUT_FILENAME = os.getenv('FIDE_INPUT_FILE', 'fide_ids.txt')
 
 
 def validate_fide_id(fide_id: str) -> bool:
     """
     Validate FIDE ID format.
-    
+
     Args:
         fide_id: The FIDE ID to validate
-        
+
     Returns:
         True if valid, False otherwise
-        
+
     Rules:
         - Must be numeric
         - Must be between 4-10 digits
     """
     if not fide_id or not isinstance(fide_id, str):
         return False
-    
+
     if not fide_id.isdigit():
         return False
-    
+
     if len(fide_id) < 4 or len(fide_id) > 10:
         return False
-    
+
     return True
+
+
+def validate_email(email: str) -> bool:
+    """
+    Validate email address format using basic RFC pattern.
+
+    Args:
+        email: The email address to validate
+
+    Returns:
+        True if valid, False otherwise
+
+    Rules:
+        - Must match pattern: non-whitespace@non-whitespace.non-whitespace
+        - Empty string is treated as valid (indicates opt-out)
+        - Basic RFC pattern, not full RFC 5322 compliance
+    """
+    import re
+
+    # Empty string is valid (opt-out from notifications)
+    if not email or not isinstance(email, str):
+        return True
+
+    # If email is empty string, it's valid
+    if email == "":
+        return True
+
+    # Basic RFC email pattern: something@something.something
+    # Must have exactly one @ symbol, no spaces, and at least one dot after @
+    pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    return bool(re.match(pattern, email))
 
 
 def construct_fide_url(fide_id: str) -> str:
@@ -269,35 +306,475 @@ def format_ratings_output(standard_rating: Optional[int], rapid_rating: Optional
     return f"Standard: {standard_str}\nRapid: {rapid_str}\nBlitz: {blitz_str}"
 
 
-def read_fide_ids_from_file(filepath: str) -> List[str]:
+def load_player_data_from_csv(filepath: str) -> Dict[str, Dict[str, str]]:
     """
-    Read FIDE IDs from a text file, one per line.
-    
+    Load player data from CSV file with FIDE IDs and optional emails.
+
+    Parses a CSV file with headers "FIDE ID" and "email", validates each row,
+    and returns a dictionary indexed by FIDE ID. Invalid entries are skipped
+    with warnings logged to stderr.
+
     Args:
-        filepath: Path to the input file
-        
+        filepath: Path to the CSV file (typically 'players.csv')
+
     Returns:
-        List of FIDE ID strings (with empty lines skipped and whitespace stripped)
-        
+        Dictionary mapping FIDE ID to player data:
+        {fide_id: {"email": "..."}, ...}
+
     Raises:
         FileNotFoundError: If file doesn't exist
-        PermissionError: If file cannot be read
+        ValueError: If CSV headers are invalid or missing
+
+    Side Effects:
+        Logs warnings to stderr for invalid entries that are skipped
     """
-    fide_ids = []
+    import logging
+
+    # Set up logging for warnings
+    logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
+    logger = logging.getLogger(__name__)
+
+    player_data = {}
+
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line:  # Skip empty lines
-                    fide_ids.append(line)
+        with open(filepath, 'r', newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+
+            # Validate headers
+            if reader.fieldnames is None:
+                raise ValueError(f"CSV file is empty: {filepath}")
+
+            required_fields = {'FIDE ID', 'email'}
+            if not required_fields.issubset(set(reader.fieldnames)):
+                raise ValueError(
+                    f"CSV file missing required headers. Expected: {required_fields}, "
+                    f"Got: {set(reader.fieldnames)}"
+                )
+
+            # Process each row
+            for row_num, row in enumerate(reader, start=2):  # Start at 2 (skip header)
+                fide_id = row.get('FIDE ID', '').strip() if row.get('FIDE ID') is not None else ''
+                email = row.get('email', '').strip() if row.get('email') is not None else ''
+
+                # Validate FIDE ID
+                if not validate_fide_id(fide_id):
+                    print(
+                        f"Warning: Line {row_num} - Invalid FIDE ID '{fide_id}' (skipped)",
+                        file=sys.stderr
+                    )
+                    continue
+
+                # Validate email (empty is ok, but must be valid if provided)
+                if not validate_email(email):
+                    print(
+                        f"Warning: Line {row_num} - Invalid email '{email}' for FIDE ID {fide_id} (skipped)",
+                        file=sys.stderr
+                    )
+                    continue
+
+                # Add to player data
+                player_data[fide_id] = {"email": email}
+
     except FileNotFoundError:
-        raise FileNotFoundError(f"File not found: {filepath}")
+        raise FileNotFoundError(f"Player data file not found: {filepath}")
     except PermissionError:
-        raise PermissionError(f"Permission denied: {filepath}")
+        raise PermissionError(f"Permission denied reading file: {filepath}")
     except UnicodeDecodeError as e:
-        raise ValueError(f"Unable to decode file {filepath}: {e}")
-    
-    return fide_ids
+        raise ValueError(f"Unable to decode file {filepath} as UTF-8: {e}")
+
+    return player_data
+
+
+def load_historical_ratings_by_player(filepath: str) -> Dict[str, Dict[str, any]]:
+    """
+    Load historical ratings from CSV file and index by FIDE ID.
+
+    Reads the output CSV file (typically 'fide_ratings.csv') and creates a dictionary
+    indexed by FIDE ID, with each entry containing the most recent rating record
+    for that player. This is used for change detection.
+
+    Args:
+        filepath: Path to the historical ratings CSV file (typically 'fide_ratings.csv')
+
+    Returns:
+        Dictionary mapping FIDE ID to latest player rating record:
+        {fide_id: {"Date": "...", "Player Name": "...", "Standard": ..., ...}, ...}
+        Returns empty dict if file doesn't exist (first run)
+
+    Side Effects:
+        None - silently returns empty dict if file missing (expected on first run)
+    """
+    player_ratings = {}
+
+    # Return empty dict if file doesn't exist (first run)
+    if not os.path.exists(filepath):
+        return player_ratings
+
+    try:
+        with open(filepath, 'r', newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+
+            # Validate headers
+            if reader.fieldnames is None:
+                return player_ratings
+
+            required_fields = {'Date', 'FIDE ID', 'Player Name', 'Standard', 'Rapid', 'Blitz'}
+            if not required_fields.issubset(set(reader.fieldnames)):
+                # File exists but has wrong format, return empty
+                return player_ratings
+
+            # Read all records, keeping only the latest for each FIDE ID
+            for row in reader:
+                fide_id = row.get('FIDE ID', '').strip()
+
+                # Skip invalid FIDE IDs
+                if not fide_id:
+                    continue
+
+                # Always keep the latest record (CSV is appended, so last one is latest)
+                player_ratings[fide_id] = {
+                    "Date": row.get('Date', ''),
+                    "Player Name": row.get('Player Name', ''),
+                    "Standard": row.get('Standard', '') or None,
+                    "Rapid": row.get('Rapid', '') or None,
+                    "Blitz": row.get('Blitz', '') or None
+                }
+
+    except (PermissionError, UnicodeDecodeError):
+        # On read errors, silently return empty dict (same as file not found)
+        return {}
+
+    return player_ratings
+
+
+def detect_rating_changes(
+    fide_id: str,
+    new_ratings: Dict[str, Optional[int]],
+    historical_data: Dict[str, Dict]
+) -> Dict[str, Tuple[Optional[int], Optional[int]]]:
+    """
+    Detect which player ratings have changed between runs.
+
+    Compares current ratings against the most recent historical record for a player.
+    Returns a dictionary of only the changed ratings.
+
+    Args:
+        fide_id: Player's FIDE ID
+        new_ratings: Latest ratings fetched (e.g., {"Standard": 2450, "Rapid": 2300, "Blitz": 2100})
+        historical_data: Dictionary indexed by FIDE ID with latest record per player
+                        (from load_historical_ratings_by_player)
+
+    Returns:
+        Dictionary of changed ratings: {rating_type: (old_value, new_value), ...}
+        Empty dict {} if no changes detected or player is new (not in history)
+
+    Examples:
+        # Player with rating increase
+        changes = detect_rating_changes(
+            "12345678",
+            {"Standard": 2450, "Rapid": 2300, "Blitz": 2100},
+            {"12345678": {"Standard": "2440", "Rapid": "2300", "Blitz": "2100"}}
+        )
+        # Returns: {"Standard": (2440, 2450)}
+
+        # New player (not in history)
+        changes = detect_rating_changes(
+            "99999999",
+            {"Standard": 2450, "Rapid": 2300, "Blitz": 2100},
+            {}
+        )
+        # Returns: {}
+    """
+    changes = {}
+
+    # If player not in historical data, they're new - no changes to report
+    if fide_id not in historical_data:
+        return changes
+
+    historical_record = historical_data[fide_id]
+
+    # Check each rating type
+    for rating_type in ["Standard", "Rapid", "Blitz"]:
+        new_rating = new_ratings.get(rating_type)
+
+        # Get historical rating, converting empty string to None
+        historical_rating_str = historical_record.get(rating_type)
+        historical_rating = None
+        if historical_rating_str and isinstance(historical_rating_str, str) and historical_rating_str.strip():
+            try:
+                historical_rating = int(historical_rating_str)
+            except (ValueError, TypeError):
+                historical_rating = None
+
+        # Compare ratings (considering None as unrated)
+        if new_rating != historical_rating:
+            changes[rating_type] = (historical_rating, new_rating)
+
+    return changes
+
+
+def compose_notification_email(
+    player_name: str,
+    fide_id: str,
+    changes: Dict[str, Tuple[Optional[int], Optional[int]]],
+    recipient_email: str,
+    cc_email: Optional[str] = None
+) -> Tuple[str, str]:
+    """
+    Compose a notification email about rating changes.
+
+    Generates an email subject and body informing a player about their FIDE rating updates.
+    The email includes their name, FIDE ID, and details of changed ratings.
+
+    Args:
+        player_name: Player's full name (e.g., "Alice Smith")
+        fide_id: Player's FIDE ID (e.g., "12345678")
+        changes: Dictionary of changed ratings {rating_type: (old_value, new_value), ...}
+                Example: {"Standard": (2440, 2450), "Rapid": (2300, 2310)}
+        recipient_email: Email address of the recipient (player)
+        cc_email: Optional email address to CC (e.g., admin email). Not used in compose, for reference.
+
+    Returns:
+        Tuple of (subject, body) containing the email subject line and body content
+
+    Examples:
+        changes = {"Standard": (2440, 2450), "Rapid": (2300, 2310)}
+        subject, body = compose_notification_email(
+            "Alice Smith",
+            "12345678",
+            changes,
+            "alice@example.com",
+            "admin@example.com"
+        )
+        # subject: "Your FIDE Rating Update - Alice Smith"
+        # body: Contains formatted rating changes with before/after values
+    """
+    # Compose subject
+    subject = f"Your FIDE Rating Update - {player_name}"
+
+    # Compose body
+    lines = [
+        "Dear " + player_name + ",",
+        "",
+        "Your FIDE ratings have been updated. Here are the changes:",
+        ""
+    ]
+
+    # Add rating changes (sorted by rating type for consistency)
+    for rating_type in sorted(changes.keys()):
+        old_value, new_value = changes[rating_type]
+
+        # Format old rating (handle None as "unrated")
+        old_str = str(old_value) if old_value is not None else "unrated"
+        # Format new rating (handle None as "unrated")
+        new_str = str(new_value) if new_value is not None else "unrated"
+
+        # Format the change line
+        lines.append(f"{rating_type} Rating: {old_str} → {new_str}")
+
+    # Add footer with FIDE profile URL
+    lines.extend([
+        "",
+        "FIDE ID: " + fide_id,
+        "Profile: " + construct_fide_url(fide_id),
+        "",
+        "Best regards,",
+        "FIDE Rating Monitor",
+        "Written by Eduardo Klein (https://eduklein.com.br/)"
+    ])
+
+    body = "\n".join(lines)
+
+    return subject, body
+
+
+def send_email_notification(
+    recipient: str,
+    cc: Optional[str],
+    subject: str,
+    body: str
+) -> bool:
+    """
+    Send an email notification via SMTP.
+
+    Sends an email with the given subject and body to the recipient, optionally CC'ing another address.
+    Uses SMTP configuration from environment variables. All errors are logged and handled gracefully
+    without raising exceptions.
+
+    Args:
+        recipient: Email address of the primary recipient (required)
+        cc: Optional email address to CC on the message
+        subject: Email subject line
+        body: Email body content (plain text)
+
+    Returns:
+        True if email was sent successfully, False if any error occurred during sending
+
+    Environment Variables (read from .env):
+        SMTP_SERVER: SMTP server hostname (default: localhost)
+        SMTP_PORT: SMTP server port (default: 587)
+        SMTP_USERNAME: Optional username for SMTP authentication
+        SMTP_PASSWORD: Optional password for SMTP authentication
+
+    Examples:
+        success = send_email_notification(
+            "alice@example.com",
+            "admin@example.com",
+            "Your FIDE Rating Update - Alice Smith",
+            "Dear Alice Smith,\nYour ratings have changed..."
+        )
+        if success:
+            print("Email sent successfully")
+        else:
+            print("Failed to send email")
+    """
+    try:
+        # Get SMTP configuration from environment
+        smtp_server = os.getenv('SMTP_SERVER', 'localhost')
+        smtp_port = int(os.getenv('SMTP_PORT', '587'))
+        smtp_username = os.getenv('SMTP_USERNAME', '').strip() or None
+        smtp_password = os.getenv('SMTP_PASSWORD', '').strip() or None
+
+        # Validate recipient email
+        if not recipient or not isinstance(recipient, str):
+            logging.error(f"Invalid recipient email: {recipient}")
+            return False
+
+        # Create email message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = smtp_username if smtp_username else 'noreply@fide-monitor.local'
+        msg['To'] = recipient
+
+        # Add CC if provided
+        if cc and isinstance(cc, str) and cc.strip():
+            msg['Cc'] = cc.strip()
+
+        # Attach plain text body
+        msg.attach(MIMEText(body, 'plain'))
+
+        # Build recipient list for sending (recipient + cc)
+        recipient_list = [recipient]
+        if cc and isinstance(cc, str) and cc.strip():
+            recipient_list.append(cc.strip())
+
+        # Connect to SMTP server and send
+        try:
+            server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
+            server.starttls()
+
+            # Authenticate if credentials provided
+            if smtp_username and smtp_password:
+                server.login(smtp_username, smtp_password)
+
+            # Send email
+            server.sendmail(
+                msg['From'],
+                recipient_list,
+                msg.as_string()
+            )
+
+            server.quit()
+            logging.info(f"Email sent successfully to {recipient}" + (f" (CC: {cc})" if cc else ""))
+            return True
+
+        except smtplib.SMTPAuthenticationError as e:
+            logging.error(f"SMTP authentication failed: {e}")
+            return False
+        except smtplib.SMTPException as e:
+            logging.error(f"SMTP error occurred: {e}")
+            return False
+        except ConnectionError as e:
+            logging.error(f"Connection error to SMTP server: {e}")
+            return False
+        except TimeoutError as e:
+            logging.error(f"SMTP connection timeout: {e}")
+            return False
+
+    except (ValueError, TypeError) as e:
+        logging.error(f"Invalid configuration or parameters: {e}")
+        return False
+    except Exception as e:
+        logging.error(f"Unexpected error sending email: {e}")
+        return False
+
+
+def send_batch_notifications(
+    results: List[Dict],
+    player_data: Dict[str, Dict[str, str]],
+    admin_cc_email: Optional[str] = None
+) -> Tuple[int, int]:
+    """
+    Send email notifications to players with rating changes.
+
+    Processes batch results and sends notification emails to players who:
+    1. Have detected rating changes
+    2. Have a valid email address configured
+    3. Have not opted out (email field not empty)
+
+    Args:
+        results: List of player results from process_batch() with 'changes' key
+        player_data: Dictionary of player data with emails {fide_id: {"email": "..."}, ...}
+        admin_cc_email: Optional admin email to CC on all notifications (from ADMIN_CC_EMAIL env var)
+
+    Returns:
+        Tuple of (sent_count, failed_count) for logging and reporting
+
+    Side Effects:
+        Sends SMTP emails for players with changes. Logs all attempts. Continues on errors.
+    """
+    sent_count = 0
+    failed_count = 0
+
+    for result in results:
+        fide_id = result.get('FIDE ID')
+        player_name = result.get('Player Name', '')
+        changes = result.get('changes', {})
+
+        # Skip if no changes detected
+        if not changes:
+            continue
+
+        # Get player email
+        if fide_id not in player_data:
+            continue
+
+        player_email = player_data[fide_id].get('email', '').strip()
+
+        # Skip if player has no email (opted out)
+        if not player_email:
+            continue
+
+        try:
+            # Compose email
+            subject, body = compose_notification_email(
+                player_name,
+                fide_id,
+                changes,
+                player_email,
+                admin_cc_email
+            )
+
+            # Send email
+            success = send_email_notification(
+                player_email,
+                admin_cc_email,
+                subject,
+                body
+            )
+
+            if success:
+                sent_count += 1
+                print(f"✓ Email sent to {player_name} ({player_email})", file=sys.stderr)
+            else:
+                failed_count += 1
+                print(f"✗ Failed to send email to {player_name} ({player_email})", file=sys.stderr)
+
+        except Exception as e:
+            failed_count += 1
+            print(f"✗ Error sending email to {fide_id}: {e}", file=sys.stderr)
+
+    return sent_count, failed_count
 
 
 def write_csv_output(filename: str, player_profiles: List[Dict]) -> None:
@@ -392,57 +869,78 @@ def format_console_output(player_profiles: List[Dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def process_batch(fide_ids: List[str]) -> Tuple[List[Dict], List[str]]:
+def process_batch(fide_ids: List[str], historical_data: Dict[str, Dict] = None) -> Tuple[List[Dict], List[str]]:
     """
-    Process a batch of FIDE IDs and extract player information.
-    
+    Process a batch of FIDE IDs and extract player information with change detection.
+
     Args:
         fide_ids: List of FIDE ID strings to process
-        
+        historical_data: Optional dictionary of historical ratings (for change detection).
+                        If None, loaded from OUTPUT_FILENAME (fide_ratings.csv).
+                        Format: {fide_id: {Date, Player Name, Standard, Rapid, Blitz}, ...}
+
     Returns:
         Tuple of (results, errors) where:
-        - results: List of dictionaries with player data
+        - results: List of dictionaries with player data and detected changes
         - errors: List of error messages
+
+    Note:
+        Each result dict includes a 'changes' key with detected rating changes:
+        {'changes': {'Standard': (old, new), ...}} for changed players,
+        {'changes': {}} for unchanged players or new players.
     """
     results = []
     errors = []
-    
+
+    # Load historical data if not provided
+    if historical_data is None:
+        historical_data = load_historical_ratings_by_player(OUTPUT_FILENAME)
+
     for fide_id in fide_ids:
         # Validate FIDE ID format
         if not validate_fide_id(fide_id):
             errors.append(f"Invalid FIDE ID format: {fide_id} (skipped)")
             continue
-        
+
         try:
             # Fetch profile
             html = fetch_fide_profile(fide_id)
-            
+
             if html is None:
                 errors.append(f"Player not found (FIDE ID: {fide_id}) (skipped)")
                 continue
-            
+
             # Extract player name
             player_name = extract_player_name(html) or ""
-            
+
             # Extract ratings
             standard_rating = extract_standard_rating(html)
             rapid_rating = extract_rapid_rating(html)
             blitz_rating = extract_blitz_rating(html)
-            
+
             # Check if we got at least one rating or player name
             if standard_rating is None and rapid_rating is None and blitz_rating is None and not player_name:
                 errors.append(f"Unable to extract data from FIDE profile (FIDE ID: {fide_id}) (skipped)")
                 continue
-            
+
+            # Detect rating changes
+            new_ratings = {
+                'Standard': standard_rating,
+                'Rapid': rapid_rating,
+                'Blitz': blitz_rating
+            }
+            changes = detect_rating_changes(fide_id, new_ratings, historical_data)
+
             # Add to results
             results.append({
                 'FIDE ID': fide_id,
                 'Player Name': player_name,
                 'Standard': standard_rating,
                 'Rapid': rapid_rating,
-                'Blitz': blitz_rating
+                'Blitz': blitz_rating,
+                'changes': changes
             })
-            
+
         except ConnectionError as e:
             errors.append(f"Network error for FIDE ID {fide_id}: {e} (skipped)")
             continue
@@ -455,7 +953,7 @@ def process_batch(fide_ids: List[str]) -> Tuple[List[Dict], List[str]]:
         except Exception as e:
             errors.append(f"Unexpected error for FIDE ID {fide_id}: {e} (skipped)")
             continue
-    
+
     return results, errors
 
 
@@ -502,16 +1000,19 @@ Single Player Mode:
     # Batch processing mode (default)
     if not args.fide_id:
         try:
-            # Read FIDE IDs from configured input file
-            fide_ids = read_fide_ids_from_file(INPUT_FILENAME)
+            # Load player data from CSV file (includes FIDE IDs and emails)
+            player_data = load_player_data_from_csv(FIDE_PLAYERS_FILE)
 
-            if not fide_ids:
-                print("Error: Input file is empty or contains no valid FIDE IDs.", file=sys.stderr)
+            if not player_data:
+                print("Error: Player data file is empty or contains no valid players.", file=sys.stderr)
                 sys.exit(2)
 
-            print(f"Processing FIDE IDs from file: {INPUT_FILENAME}\n")
+            # Extract FIDE IDs from the loaded player data
+            fide_ids = list(player_data.keys())
 
-            # Process batch
+            print(f"Processing {len(fide_ids)} players from file: {FIDE_PLAYERS_FILE}\n")
+
+            # Process batch to fetch ratings
             results, errors = process_batch(fide_ids)
 
             # Write CSV output
@@ -526,11 +1027,22 @@ Single Player Mode:
                 for error in errors:
                     print(f"Error: {error}", file=sys.stderr)
 
+            # Send email notifications for players with rating changes
+            admin_cc_email = os.getenv('ADMIN_CC_EMAIL', '').strip() or None
+            print(f"\nSending email notifications...")
+            email_sent, email_failed = send_batch_notifications(
+                results,
+                player_data,
+                admin_cc_email
+            )
+
             # Print summary
             success_count = len(results)
             error_count = len(errors)
+            print(f"\nProcessed {success_count} IDs successfully, {error_count} errors")
             print(f"Output written to: {OUTPUT_FILENAME}")
-            print(f"Processed {success_count} IDs successfully, {error_count} errors")
+            if email_sent > 0 or email_failed > 0:
+                print(f"Email notifications: {email_sent} sent, {email_failed} failed")
 
             # Exit code: 0 if at least one success, 1 if all failed
             if success_count > 0:
@@ -539,6 +1051,9 @@ Single Player Mode:
                 sys.exit(1)
 
         except FileNotFoundError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(2)
+        except ValueError as e:
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(2)
         except PermissionError as e:

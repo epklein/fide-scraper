@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch, MagicMock
 import sys
 import os
 import requests
+import smtplib
 
 # Add parent directory to path to import fide_scraper
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -340,47 +341,6 @@ class TestPlayerNameExtraction:
         assert name is None or isinstance(name, str)
 
 
-class TestFileReading:
-    """Tests for file reading function."""
-    
-    def test_read_fide_ids_from_file_valid(self, tmp_path):
-        """Test reading valid FIDE IDs from file."""
-        test_file = tmp_path / "test_ids.txt"
-        test_file.write_text("538026660\n2016892\n1503014\n")
-        fide_ids = fide_scraper.read_fide_ids_from_file(str(test_file))
-        assert fide_ids == ["538026660", "2016892", "1503014"]
-    
-    def test_read_fide_ids_from_file_with_empty_lines(self, tmp_path):
-        """Test reading file with empty lines (should be skipped)."""
-        test_file = tmp_path / "test_ids.txt"
-        test_file.write_text("538026660\n\n2016892\n\n1503014\n")
-        fide_ids = fide_scraper.read_fide_ids_from_file(str(test_file))
-        assert fide_ids == ["538026660", "2016892", "1503014"]
-    
-    def test_read_fide_ids_from_file_with_whitespace(self, tmp_path):
-        """Test reading file with whitespace around IDs (should be stripped)."""
-        test_file = tmp_path / "test_ids.txt"
-        test_file.write_text("  538026660  \n  2016892  \n  1503014  \n")
-        fide_ids = fide_scraper.read_fide_ids_from_file(str(test_file))
-        assert fide_ids == ["538026660", "2016892", "1503014"]
-    
-    def test_read_fide_ids_from_file_not_found(self):
-        """Test handling of file not found."""
-        with pytest.raises(FileNotFoundError):
-            fide_scraper.read_fide_ids_from_file("nonexistent_file.txt")
-    
-    def test_read_fide_ids_from_file_permission_error(self, tmp_path, monkeypatch):
-        """Test handling of permission errors."""
-        test_file = tmp_path / "test_ids.txt"
-        test_file.write_text("538026660\n")
-        # Mock open to raise PermissionError
-        def mock_open(*args, **kwargs):
-            raise PermissionError("Permission denied")
-        monkeypatch.setattr("builtins.open", mock_open)
-        with pytest.raises(PermissionError):
-            fide_scraper.read_fide_ids_from_file(str(test_file))
-
-
 class TestCSVGeneration:
     """Tests for CSV generation function."""
 
@@ -647,3 +607,927 @@ class TestBatchProcessingErrorHandling:
         results, errors = fide_scraper.process_batch(fide_ids)
         # Should continue processing after player not found
         assert len(errors) >= 1  # At least one error for player not found
+
+
+class TestLoadPlayerDataFromCSV:
+    """Tests for load_player_data_from_csv function."""
+
+    def test_load_player_data_from_csv_valid(self, tmp_path):
+        """Test loading valid player data from CSV."""
+        test_file = tmp_path / "players.csv"
+        test_file.write_text(
+            "FIDE ID,email\n"
+            "12345678,alice@example.com\n"
+            "87654321,bob@example.com\n"
+            "11111111,\n"
+        )
+        result = fide_scraper.load_player_data_from_csv(str(test_file))
+
+        assert len(result) == 3
+        assert result["12345678"]["email"] == "alice@example.com"
+        assert result["87654321"]["email"] == "bob@example.com"
+        assert result["11111111"]["email"] == ""
+
+    def test_load_player_data_from_csv_invalid_email(self, tmp_path, capsys):
+        """Test that invalid emails are skipped with warnings."""
+        test_file = tmp_path / "players.csv"
+        test_file.write_text(
+            "FIDE ID,email\n"
+            "12345678,alice@example.com\n"
+            "87654321,invalid-email\n"
+            "11111111,charlie@example.com\n"
+        )
+        result = fide_scraper.load_player_data_from_csv(str(test_file))
+
+        # Should have 2 valid entries (87654321 skipped due to invalid email)
+        assert len(result) == 2
+        assert "12345678" in result
+        assert "87654321" not in result
+        assert "11111111" in result
+
+        # Check that warning was printed to stderr
+        captured = capsys.readouterr()
+        assert "Warning" in captured.err or "invalid email" in captured.err.lower()
+
+    def test_load_player_data_from_csv_missing_email(self, tmp_path):
+        """Test handling of missing email (empty field)."""
+        test_file = tmp_path / "players.csv"
+        test_file.write_text(
+            "FIDE ID,email\n"
+            "12345678,alice@example.com\n"
+            "87654321,\n"
+            "11111111,charlie@example.com\n"
+        )
+        result = fide_scraper.load_player_data_from_csv(str(test_file))
+
+        assert len(result) == 3
+        assert result["87654321"]["email"] == ""
+
+    def test_load_player_data_from_csv_file_not_found(self):
+        """Test handling of missing CSV file."""
+        with pytest.raises(FileNotFoundError):
+            fide_scraper.load_player_data_from_csv("/nonexistent/path/players.csv")
+
+    def test_load_player_data_from_csv_invalid_headers(self, tmp_path):
+        """Test handling of invalid CSV headers."""
+        test_file = tmp_path / "players.csv"
+        test_file.write_text(
+            "ID,Email\n"
+            "12345678,alice@example.com\n"
+        )
+        with pytest.raises(ValueError) as exc_info:
+            fide_scraper.load_player_data_from_csv(str(test_file))
+        assert "missing required headers" in str(exc_info.value).lower()
+
+    def test_load_player_data_from_csv_invalid_fide_id(self, tmp_path, capsys):
+        """Test that invalid FIDE IDs are skipped with warnings."""
+        test_file = tmp_path / "players.csv"
+        test_file.write_text(
+            "FIDE ID,email\n"
+            "12345678,alice@example.com\n"
+            "123,invalid_fide\n"
+            "87654321,bob@example.com\n"
+        )
+        result = fide_scraper.load_player_data_from_csv(str(test_file))
+
+        # Should have 2 valid entries (123 is too short)
+        assert len(result) == 2
+        assert "12345678" in result
+        assert "123" not in result
+        assert "87654321" in result
+
+        # Check that warning was printed to stderr
+        captured = capsys.readouterr()
+        assert "Warning" in captured.err or "invalid fide id" in captured.err.lower()
+
+    def test_load_player_data_from_csv_empty_lines(self, tmp_path):
+        """Test handling of empty lines in CSV."""
+        test_file = tmp_path / "players.csv"
+        test_file.write_text(
+            "FIDE ID,email\n"
+            "12345678,alice@example.com\n"
+            "\n"
+            "87654321,bob@example.com\n"
+        )
+        result = fide_scraper.load_player_data_from_csv(str(test_file))
+
+        # Should have 2 valid entries
+        assert len(result) == 2
+        assert "12345678" in result
+        assert "87654321" in result
+
+    def test_load_player_data_from_csv_whitespace_stripped(self, tmp_path):
+        """Test that whitespace is stripped from FIDE ID and email."""
+        test_file = tmp_path / "players.csv"
+        test_file.write_text(
+            "FIDE ID,email\n"
+            "  12345678  ,  alice@example.com  \n"
+            "87654321,  bob@example.com  \n"
+        )
+        result = fide_scraper.load_player_data_from_csv(str(test_file))
+
+        assert len(result) == 2
+        assert result["12345678"]["email"] == "alice@example.com"
+        assert result["87654321"]["email"] == "bob@example.com"
+
+
+class TestLoadHistoricalRatingsByPlayer:
+    """Tests for load_historical_ratings_by_player function."""
+
+    def test_load_historical_ratings_valid(self, tmp_path):
+        """Test loading valid historical ratings."""
+        test_file = tmp_path / "fide_ratings.csv"
+        test_file.write_text(
+            "Date,FIDE ID,Player Name,Standard,Rapid,Blitz\n"
+            "2025-11-21,12345678,Alice Smith,2440,2300,2100\n"
+            "2025-11-21,87654321,Bob Jones,2500,2400,\n"
+            "2025-11-22,12345678,Alice Smith,2450,2310,2110\n"
+        )
+        result = fide_scraper.load_historical_ratings_by_player(str(test_file))
+
+        assert len(result) == 2
+        # Should have the latest record for each FIDE ID
+        assert result["12345678"]["Standard"] == "2450"
+        assert result["87654321"]["Standard"] == "2500"
+
+    def test_load_historical_ratings_latest_per_player(self, tmp_path):
+        """Test that only latest record per player is kept."""
+        test_file = tmp_path / "fide_ratings.csv"
+        test_file.write_text(
+            "Date,FIDE ID,Player Name,Standard,Rapid,Blitz\n"
+            "2025-11-20,12345678,Alice Smith,2400,2250,2050\n"
+            "2025-11-21,12345678,Alice Smith,2440,2300,2100\n"
+            "2025-11-22,12345678,Alice Smith,2450,2310,2110\n"
+        )
+        result = fide_scraper.load_historical_ratings_by_player(str(test_file))
+
+        assert len(result) == 1
+        assert result["12345678"]["Date"] == "2025-11-22"
+        assert result["12345678"]["Standard"] == "2450"
+
+    def test_load_historical_ratings_file_not_found(self):
+        """Test that missing file returns empty dict (first run)."""
+        result = fide_scraper.load_historical_ratings_by_player("/nonexistent/path/fide_ratings.csv")
+        assert result == {}
+
+    def test_load_historical_ratings_invalid_headers(self, tmp_path):
+        """Test handling of invalid CSV headers."""
+        test_file = tmp_path / "fide_ratings.csv"
+        test_file.write_text(
+            "Date,ID,Name,Standard\n"
+            "2025-11-21,12345678,Alice Smith,2440\n"
+        )
+        # Should return empty dict for invalid format (not raise exception)
+        result = fide_scraper.load_historical_ratings_by_player(str(test_file))
+        assert result == {}
+
+    def test_load_historical_ratings_empty_file(self, tmp_path):
+        """Test handling of empty CSV file."""
+        test_file = tmp_path / "fide_ratings.csv"
+        test_file.write_text("")
+        result = fide_scraper.load_historical_ratings_by_player(str(test_file))
+        assert result == {}
+
+    def test_load_historical_ratings_unrated_handling(self, tmp_path):
+        """Test handling of unrated/empty rating values."""
+        test_file = tmp_path / "fide_ratings.csv"
+        test_file.write_text(
+            "Date,FIDE ID,Player Name,Standard,Rapid,Blitz\n"
+            "2025-11-21,12345678,Alice Smith,2440,,2100\n"
+            "2025-11-21,87654321,Bob Jones,,,\n"
+        )
+        result = fide_scraper.load_historical_ratings_by_player(str(test_file))
+
+        assert len(result) == 2
+        # Empty string should be converted to None
+        assert result["12345678"]["Rapid"] is None
+        assert result["87654321"]["Standard"] is None
+
+    def test_load_historical_ratings_converts_empty_to_none(self, tmp_path):
+        """Test that empty rating strings are converted to None."""
+        test_file = tmp_path / "fide_ratings.csv"
+        test_file.write_text(
+            "Date,FIDE ID,Player Name,Standard,Rapid,Blitz\n"
+            "2025-11-21,12345678,Alice Smith,2440,2300,\n"
+        )
+        result = fide_scraper.load_historical_ratings_by_player(str(test_file))
+
+        assert result["12345678"]["Standard"] == "2440"
+        assert result["12345678"]["Rapid"] == "2300"
+        assert result["12345678"]["Blitz"] is None
+
+
+class TestDetectRatingChanges:
+    """Tests for detect_rating_changes function."""
+
+    def test_detect_rating_changes_numeric_change(self):
+        """Test detecting numeric rating change."""
+        historical_data = {
+            "12345678": {
+                "Standard": "2440",
+                "Rapid": "2300",
+                "Blitz": "2100"
+            }
+        }
+        new_ratings = {
+            "Standard": 2450,
+            "Rapid": 2300,
+            "Blitz": 2100
+        }
+        changes = fide_scraper.detect_rating_changes(
+            "12345678", new_ratings, historical_data
+        )
+
+        assert "Standard" in changes
+        assert changes["Standard"] == (2440, 2450)
+        assert "Rapid" not in changes
+        assert "Blitz" not in changes
+
+    def test_detect_rating_changes_unrated_to_rated(self):
+        """Test detecting transition from unrated to rated."""
+        historical_data = {
+            "12345678": {
+                "Standard": "2440",
+                "Rapid": None,
+                "Blitz": "2100"
+            }
+        }
+        new_ratings = {
+            "Standard": 2440,
+            "Rapid": 2250,
+            "Blitz": 2100
+        }
+        changes = fide_scraper.detect_rating_changes(
+            "12345678", new_ratings, historical_data
+        )
+
+        assert "Rapid" in changes
+        assert changes["Rapid"] == (None, 2250)
+        assert len(changes) == 1
+
+    def test_detect_rating_changes_rated_to_unrated(self):
+        """Test detecting transition from rated to unrated."""
+        historical_data = {
+            "12345678": {
+                "Standard": "2440",
+                "Rapid": "2300",
+                "Blitz": "2100"
+            }
+        }
+        new_ratings = {
+            "Standard": 2440,
+            "Rapid": None,
+            "Blitz": 2100
+        }
+        changes = fide_scraper.detect_rating_changes(
+            "12345678", new_ratings, historical_data
+        )
+
+        assert "Rapid" in changes
+        assert changes["Rapid"] == (2300, None)
+        assert len(changes) == 1
+
+    def test_detect_rating_changes_multiple_types(self):
+        """Test detecting changes in multiple rating types."""
+        historical_data = {
+            "12345678": {
+                "Standard": "2440",
+                "Rapid": "2300",
+                "Blitz": "2100"
+            }
+        }
+        new_ratings = {
+            "Standard": 2450,
+            "Rapid": 2310,
+            "Blitz": 2100
+        }
+        changes = fide_scraper.detect_rating_changes(
+            "12345678", new_ratings, historical_data
+        )
+
+        assert "Standard" in changes
+        assert changes["Standard"] == (2440, 2450)
+        assert "Rapid" in changes
+        assert changes["Rapid"] == (2300, 2310)
+        assert "Blitz" not in changes
+        assert len(changes) == 2
+
+    def test_detect_rating_changes_no_changes(self):
+        """Test detecting no changes when ratings are identical."""
+        historical_data = {
+            "12345678": {
+                "Standard": "2440",
+                "Rapid": "2300",
+                "Blitz": "2100"
+            }
+        }
+        new_ratings = {
+            "Standard": 2440,
+            "Rapid": 2300,
+            "Blitz": 2100
+        }
+        changes = fide_scraper.detect_rating_changes(
+            "12345678", new_ratings, historical_data
+        )
+
+        assert changes == {}
+
+    def test_detect_rating_changes_missing_player(self):
+        """Test that new player (not in history) returns no changes."""
+        historical_data = {}
+        new_ratings = {
+            "Standard": 2440,
+            "Rapid": 2300,
+            "Blitz": 2100
+        }
+        changes = fide_scraper.detect_rating_changes(
+            "99999999", new_ratings, historical_data
+        )
+
+        assert changes == {}
+
+    def test_detect_rating_changes_all_unrated_to_unrated(self):
+        """Test no changes when all ratings remain unrated."""
+        historical_data = {
+            "12345678": {
+                "Standard": None,
+                "Rapid": None,
+                "Blitz": None
+            }
+        }
+        new_ratings = {
+            "Standard": None,
+            "Rapid": None,
+            "Blitz": None
+        }
+        changes = fide_scraper.detect_rating_changes(
+            "12345678", new_ratings, historical_data
+        )
+
+        assert changes == {}
+
+    def test_detect_rating_changes_empty_string_ratings(self):
+        """Test handling empty string ratings from historical data."""
+        historical_data = {
+            "12345678": {
+                "Standard": "2440",
+                "Rapid": "",
+                "Blitz": "2100"
+            }
+        }
+        new_ratings = {
+            "Standard": 2440,
+            "Rapid": 2250,
+            "Blitz": 2100
+        }
+        changes = fide_scraper.detect_rating_changes(
+            "12345678", new_ratings, historical_data
+        )
+
+        # Empty string should be treated as None
+        assert "Rapid" in changes
+        assert changes["Rapid"] == (None, 2250)
+
+    def test_detect_rating_changes_missing_rating_types(self):
+        """Test handling when new_ratings missing some types."""
+        historical_data = {
+            "12345678": {
+                "Standard": "2440",
+                "Rapid": "2300",
+                "Blitz": "2100"
+            }
+        }
+        new_ratings = {
+            "Standard": 2440,
+            "Rapid": 2300
+            # Blitz missing
+        }
+        changes = fide_scraper.detect_rating_changes(
+            "12345678", new_ratings, historical_data
+        )
+
+        # Missing Blitz (None) vs "2100" should be detected as change
+        assert "Blitz" in changes
+        assert changes["Blitz"] == (2100, None)
+
+    def test_detect_rating_changes_significant_increase(self):
+        """Test detecting significant rating increase."""
+        historical_data = {
+            "12345678": {
+                "Standard": "2440",
+                "Rapid": "2300",
+                "Blitz": "2100"
+            }
+        }
+        new_ratings = {
+            "Standard": 2550,
+            "Rapid": 2400,
+            "Blitz": 2200
+        }
+        changes = fide_scraper.detect_rating_changes(
+            "12345678", new_ratings, historical_data
+        )
+
+        assert "Standard" in changes
+        assert changes["Standard"] == (2440, 2550)
+        assert "Rapid" in changes
+        assert changes["Rapid"] == (2300, 2400)
+        assert "Blitz" in changes
+        assert changes["Blitz"] == (2100, 2200)
+
+    def test_detect_rating_changes_decrease(self):
+        """Test detecting rating decrease."""
+        historical_data = {
+            "12345678": {
+                "Standard": "2440",
+                "Rapid": "2300",
+                "Blitz": "2100"
+            }
+        }
+        new_ratings = {
+            "Standard": 2420,
+            "Rapid": 2280,
+            "Blitz": 2080
+        }
+        changes = fide_scraper.detect_rating_changes(
+            "12345678", new_ratings, historical_data
+        )
+
+        assert "Standard" in changes
+        assert changes["Standard"] == (2440, 2420)
+        assert "Rapid" in changes
+        assert changes["Rapid"] == (2300, 2280)
+        assert "Blitz" in changes
+        assert changes["Blitz"] == (2100, 2080)
+
+
+class TestComposeNotificationEmail:
+    """Tests for compose_notification_email function."""
+
+    def test_compose_notification_email_single_change(self):
+        """Test composing email with a single rating change."""
+        changes = {"Standard": (2440, 2450)}
+        subject, body = fide_scraper.compose_notification_email(
+            "Alice Smith",
+            "12345678",
+            changes,
+            "alice@example.com"
+        )
+
+        assert subject == "Your FIDE Rating Update - Alice Smith"
+        assert "Dear Alice Smith," in body
+        assert "Standard Rating: 2440 → 2450" in body
+        assert "FIDE ID: 12345678" in body
+        assert "FIDE Rating Monitor" in body
+
+    def test_compose_notification_email_multiple_changes(self):
+        """Test composing email with multiple rating changes."""
+        changes = {
+            "Standard": (2440, 2450),
+            "Rapid": (2300, 2310),
+            "Blitz": (2100, 2115)
+        }
+        subject, body = fide_scraper.compose_notification_email(
+            "Bob Jones",
+            "87654321",
+            changes,
+            "bob@example.com"
+        )
+
+        assert subject == "Your FIDE Rating Update - Bob Jones"
+        assert "Standard Rating: 2440 → 2450" in body
+        assert "Rapid Rating: 2300 → 2310" in body
+        assert "Blitz Rating: 2100 → 2115" in body
+        assert "FIDE ID: 87654321" in body
+
+    def test_compose_notification_email_unrated_to_rated(self):
+        """Test composing email when player becomes rated."""
+        changes = {"Standard": (None, 2450)}
+        subject, body = fide_scraper.compose_notification_email(
+            "Charlie Brown",
+            "11111111",
+            changes,
+            "charlie@example.com"
+        )
+
+        assert "Standard Rating: unrated → 2450" in body
+        assert "Charlie Brown" in subject
+
+    def test_compose_notification_email_rated_to_unrated(self):
+        """Test composing email when player rating is removed."""
+        changes = {"Rapid": (2300, None)}
+        subject, body = fide_scraper.compose_notification_email(
+            "Diana Prince",
+            "22222222",
+            changes,
+            "diana@example.com"
+        )
+
+        assert "Rapid Rating: 2300 → unrated" in body
+        assert "Diana Prince" in subject
+
+    def test_compose_notification_email_multiple_unrated_transitions(self):
+        """Test composing email with mixed unrated transitions."""
+        changes = {
+            "Standard": (None, 2500),
+            "Rapid": (2400, None),
+            "Blitz": (2300, 2350)
+        }
+        subject, body = fide_scraper.compose_notification_email(
+            "Eve Wilson",
+            "33333333",
+            changes,
+            "eve@example.com"
+        )
+
+        assert "Standard Rating: unrated → 2500" in body
+        assert "Rapid Rating: 2400 → unrated" in body
+        assert "Blitz Rating: 2300 → 2350" in body
+
+    def test_compose_notification_email_sorted_by_rating_type(self):
+        """Test that rating changes are sorted alphabetically by type."""
+        changes = {
+            "Blitz": (2100, 2115),
+            "Standard": (2440, 2450),
+            "Rapid": (2300, 2310)
+        }
+        subject, body = fide_scraper.compose_notification_email(
+            "Frank Miller",
+            "44444444",
+            changes,
+            "frank@example.com"
+        )
+
+        # Extract the lines with ratings
+        lines = body.split('\n')
+        rating_lines = [line for line in lines if "Rating:" in line]
+
+        # Verify they appear in sorted order: Blitz, Rapid, Standard
+        assert len(rating_lines) == 3
+        assert "Blitz" in rating_lines[0]
+        assert "Rapid" in rating_lines[1]
+        assert "Standard" in rating_lines[2]
+
+    def test_compose_notification_email_with_cc_parameter(self):
+        """Test that cc_email parameter is accepted but not used in composition."""
+        changes = {"Standard": (2440, 2450)}
+        subject, body = fide_scraper.compose_notification_email(
+            "Grace Lee",
+            "55555555",
+            changes,
+            "grace@example.com",
+            "admin@example.com"
+        )
+
+        assert subject == "Your FIDE Rating Update - Grace Lee"
+        assert "Standard Rating: 2440 → 2450" in body
+        # CC email should not appear in the body
+        assert "admin@example.com" not in body
+
+    def test_compose_notification_email_without_cc_parameter(self):
+        """Test that cc_email is optional."""
+        changes = {"Standard": (2440, 2450)}
+        subject, body = fide_scraper.compose_notification_email(
+            "Henry Ford",
+            "66666666",
+            changes,
+            "henry@example.com"
+        )
+
+        assert subject == "Your FIDE Rating Update - Henry Ford"
+        assert "Your FIDE ratings have been updated" in body
+
+    def test_compose_notification_email_special_characters_in_name(self):
+        """Test composing email with special characters in player name."""
+        changes = {"Standard": (2440, 2450)}
+        subject, body = fide_scraper.compose_notification_email(
+            "José García-López",
+            "77777777",
+            changes,
+            "jose@example.com"
+        )
+
+        assert "José García-López" in subject
+        assert "Dear José García-López," in body
+
+    def test_compose_notification_email_large_rating_change(self):
+        """Test composing email with large rating fluctuation."""
+        changes = {
+            "Standard": (2200, 2500),  # 300 point jump
+            "Rapid": (2100, 1900)      # 200 point drop
+        }
+        subject, body = fide_scraper.compose_notification_email(
+            "Iris Newton",
+            "88888888",
+            changes,
+            "iris@example.com"
+        )
+
+        assert "Standard Rating: 2200 → 2500" in body
+        assert "Rapid Rating: 2100 → 1900" in body
+
+    def test_compose_notification_email_format_consistency(self):
+        """Test that email format is consistent with expected structure."""
+        changes = {"Standard": (2440, 2450)}
+        subject, body = fide_scraper.compose_notification_email(
+            "Jack Turner",
+            "99999999",
+            changes,
+            "jack@example.com"
+        )
+
+        # Verify expected sections exist in order
+        assert body.startswith("Dear Jack Turner,")
+        assert "\n\nYour FIDE ratings have been updated. Here are the changes:\n" in body
+        assert "FIDE ID: 99999999" in body
+
+    def test_compose_notification_email_no_changes(self):
+        """Test composing email with no rating changes (edge case)."""
+        changes = {}
+        subject, body = fide_scraper.compose_notification_email(
+            "Kate Mitchell",
+            "10101010",
+            changes,
+            "kate@example.com"
+        )
+
+        assert subject == "Your FIDE Rating Update - Kate Mitchell"
+        # Body should still have standard greeting and footer
+        assert "Dear Kate Mitchell," in body
+        assert "FIDE ID: 10101010" in body
+
+
+class TestSendEmailNotification:
+    """Tests for send_email_notification function."""
+
+    @patch('fide_scraper.smtplib.SMTP')
+    @patch.dict(os.environ, {
+        'SMTP_SERVER': 'smtp.example.com',
+        'SMTP_PORT': '587',
+        'SMTP_USERNAME': 'user@example.com',
+        'SMTP_PASSWORD': 'password123'
+    })
+    def test_send_email_notification_success(self, mock_smtp_class):
+        """Test successful email sending."""
+        mock_server = MagicMock()
+        mock_smtp_class.return_value = mock_server
+
+        result = fide_scraper.send_email_notification(
+            "alice@example.com",
+            None,
+            "Test Subject",
+            "Test Body"
+        )
+
+        assert result is True
+        mock_smtp_class.assert_called_once_with('smtp.example.com', 587, timeout=10)
+        mock_server.starttls.assert_called_once()
+        mock_server.login.assert_called_once_with('user@example.com', 'password123')
+        mock_server.sendmail.assert_called_once()
+        mock_server.quit.assert_called_once()
+
+    @patch('fide_scraper.smtplib.SMTP')
+    @patch.dict(os.environ, {
+        'SMTP_SERVER': 'localhost',
+        'SMTP_PORT': '587'
+    }, clear=False)
+    def test_send_email_notification_with_cc(self, mock_smtp_class):
+        """Test email sending with CC recipient."""
+        mock_server = MagicMock()
+        mock_smtp_class.return_value = mock_server
+
+        result = fide_scraper.send_email_notification(
+            "alice@example.com",
+            "admin@example.com",
+            "Test Subject",
+            "Test Body"
+        )
+
+        assert result is True
+        # Verify sendmail was called with both recipients
+        call_args = mock_server.sendmail.call_args
+        recipients = call_args[0][1]
+        assert "alice@example.com" in recipients
+        assert "admin@example.com" in recipients
+
+    @patch('fide_scraper.smtplib.SMTP')
+    @patch.dict(os.environ, {
+        'SMTP_SERVER': 'localhost',
+        'SMTP_PORT': '587',
+        'SMTP_USERNAME': '',
+        'SMTP_PASSWORD': ''
+    })
+    def test_send_email_notification_no_auth(self, mock_smtp_class):
+        """Test email sending without authentication."""
+        mock_server = MagicMock()
+        mock_smtp_class.return_value = mock_server
+
+        result = fide_scraper.send_email_notification(
+            "bob@example.com",
+            None,
+            "Subject",
+            "Body"
+        )
+
+        assert result is True
+        mock_server.starttls.assert_called_once()
+        # login should not be called when no credentials
+        mock_server.login.assert_not_called()
+        mock_server.sendmail.assert_called_once()
+
+    @patch('fide_scraper.smtplib.SMTP')
+    @patch.dict(os.environ, {
+        'SMTP_SERVER': 'localhost',
+        'SMTP_PORT': '587',
+        'SMTP_USERNAME': 'user@example.com',
+        'SMTP_PASSWORD': 'wrong_password'
+    })
+    def test_send_email_notification_smtp_auth_error(self, mock_smtp_class):
+        """Test handling of SMTP authentication error."""
+        mock_server = MagicMock()
+        mock_smtp_class.return_value = mock_server
+        mock_server.login.side_effect = smtplib.SMTPAuthenticationError(401, "Invalid credentials")
+
+        result = fide_scraper.send_email_notification(
+            "charlie@example.com",
+            None,
+            "Subject",
+            "Body"
+        )
+
+        assert result is False
+
+    @patch('fide_scraper.smtplib.SMTP')
+    def test_send_email_notification_smtp_error(self, mock_smtp_class):
+        """Test handling of general SMTP error."""
+        mock_server = MagicMock()
+        mock_smtp_class.return_value = mock_server
+        mock_server.sendmail.side_effect = smtplib.SMTPException("SMTP error")
+
+        result = fide_scraper.send_email_notification(
+            "diana@example.com",
+            None,
+            "Subject",
+            "Body"
+        )
+
+        assert result is False
+
+    @patch('fide_scraper.smtplib.SMTP')
+    def test_send_email_notification_connection_error(self, mock_smtp_class):
+        """Test handling of connection error."""
+        mock_smtp_class.side_effect = ConnectionError("Connection refused")
+
+        result = fide_scraper.send_email_notification(
+            "eve@example.com",
+            None,
+            "Subject",
+            "Body"
+        )
+
+        assert result is False
+
+    @patch('fide_scraper.smtplib.SMTP')
+    def test_send_email_notification_timeout(self, mock_smtp_class):
+        """Test handling of timeout error."""
+        mock_smtp_class.side_effect = TimeoutError("Connection timeout")
+
+        result = fide_scraper.send_email_notification(
+            "frank@example.com",
+            None,
+            "Subject",
+            "Body"
+        )
+
+        assert result is False
+
+    def test_send_email_notification_invalid_recipient(self):
+        """Test handling of invalid recipient email."""
+        result = fide_scraper.send_email_notification(
+            "",
+            None,
+            "Subject",
+            "Body"
+        )
+
+        assert result is False
+
+    def test_send_email_notification_none_recipient(self):
+        """Test handling of None recipient email."""
+        result = fide_scraper.send_email_notification(
+            None,
+            None,
+            "Subject",
+            "Body"
+        )
+
+        assert result is False
+
+    @patch('fide_scraper.smtplib.SMTP')
+    @patch.dict(os.environ, {
+        'SMTP_PORT': 'invalid_port'
+    }, clear=False)
+    def test_send_email_notification_invalid_port(self, mock_smtp_class):
+        """Test handling of invalid SMTP port configuration."""
+        result = fide_scraper.send_email_notification(
+            "grace@example.com",
+            None,
+            "Subject",
+            "Body"
+        )
+
+        assert result is False
+
+    @patch('fide_scraper.smtplib.SMTP')
+    @patch.dict(os.environ, {
+        'SMTP_SERVER': 'localhost',
+        'SMTP_PORT': '587'
+    }, clear=False)
+    def test_send_email_notification_email_format(self, mock_smtp_class):
+        """Test that email is properly formatted with headers."""
+        mock_server = MagicMock()
+        mock_smtp_class.return_value = mock_server
+
+        result = fide_scraper.send_email_notification(
+            "henry@example.com",
+            "admin@example.com",
+            "Test Subject",
+            "Test Body Content"
+        )
+
+        assert result is True
+        # Get the email message sent
+        call_args = mock_server.sendmail.call_args
+        email_content = call_args[0][2]
+
+        assert "Subject: Test Subject" in email_content
+        assert "To: henry@example.com" in email_content
+        assert "Cc: admin@example.com" in email_content
+        assert "Test Body Content" in email_content
+
+    @patch('fide_scraper.smtplib.SMTP')
+    @patch.dict(os.environ, {
+        'SMTP_SERVER': 'localhost',
+        'SMTP_PORT': '587'
+    }, clear=False)
+    def test_send_email_notification_special_characters(self, mock_smtp_class):
+        """Test email with special characters in subject and body."""
+        mock_server = MagicMock()
+        mock_smtp_class.return_value = mock_server
+
+        result = fide_scraper.send_email_notification(
+            "iris@example.com",
+            None,
+            "Rating Update - José García",
+            "Dear José,\nYour rating changed: 2440 → 2450"
+        )
+
+        assert result is True
+        mock_server.sendmail.assert_called_once()
+
+    @patch('fide_scraper.smtplib.SMTP')
+    @patch.dict(os.environ, {
+        'SMTP_SERVER': 'localhost',
+        'SMTP_PORT': '587',
+        'SMTP_USERNAME': '',
+        'SMTP_PASSWORD': ''
+    })
+    def test_send_email_notification_empty_credentials(self, mock_smtp_class):
+        """Test that empty credentials are treated as no authentication."""
+        mock_server = MagicMock()
+        mock_smtp_class.return_value = mock_server
+
+        result = fide_scraper.send_email_notification(
+            "jack@example.com",
+            None,
+            "Subject",
+            "Body"
+        )
+
+        assert result is True
+        # login should not be called with empty credentials
+        mock_server.login.assert_not_called()
+
+    @patch('fide_scraper.smtplib.SMTP')
+    @patch.dict(os.environ, {
+        'SMTP_SERVER': 'localhost',
+        'SMTP_PORT': '587'
+    }, clear=False)
+    def test_send_email_notification_whitespace_cc(self, mock_smtp_class):
+        """Test that whitespace-only CC is treated as no CC."""
+        mock_server = MagicMock()
+        mock_smtp_class.return_value = mock_server
+
+        result = fide_scraper.send_email_notification(
+            "kate@example.com",
+            "   ",
+            "Subject",
+            "Body"
+        )
+
+        assert result is True
+        # Verify only recipient is in the recipient list
+        call_args = mock_server.sendmail.call_args
+        recipients = call_args[0][1]
+        assert len(recipients) == 1
+        assert recipients[0] == "kate@example.com"
