@@ -10,8 +10,89 @@ I had to step in during the research phase to provide HTML examples that support
 
 - Python 3.11 or higher
 - pip (Python package manager)
+- **Docker (optional)**: For containerized deployment
 
-## Installation
+## Docker Deployment
+
+Run the scraper in a Docker container without installing Python locally.
+
+### Quick Start
+
+```bash
+# Build the Docker image
+docker-compose build
+
+# Run batch processing
+docker-compose up
+```
+
+### Configuration
+
+The Docker setup includes:
+- **Input**: `players.csv` mounted from `./data/` on host
+- **Output**: Results saved to `./output/fide_ratings.csv` on the host
+- **SMTP**: Optional MailHog service for email testing
+
+**Directory structure:**
+```
+.
+├── data/
+│   └── players.csv          # Input file (mount from host)
+├── output/
+│   └── fide_ratings.csv     # Output file (mount from host)
+├── docker-compose.yaml
+├── Dockerfile
+└── ...
+```
+
+### Environment Setup
+
+### Output Files
+
+Results are written to `./output/fide_ratings.csv` on your host machine (mounted from container).
+
+### Scheduled Execution with Cron
+
+To run the scraper automatically every 2 hours (recommended for production):
+
+**Step 1: Setup cron job**
+```bash
+./setup-cron.sh
+```
+
+This adds: `0 */2 * * * /app/run-scraper.sh`
+
+**Step 2: Verify cron is configured**
+```bash
+crontab -l                    # View all scheduled jobs
+tail -f logs/scraper.log      # View latest logs
+```
+
+**Step 3: Manage cron job**
+```bash
+crontab -e                # Edit or change schedule
+crontab -r                # Remove cron job
+```
+
+**How it works:**
+- Runs every 2 hours at the top of the hour (0, 2, 4, 6, ... 22)
+- `run-scraper.sh` executes the Docker container once
+- Logs saved to `logs/scraper.log`
+- No container auto-restart needed
+
+### Troubleshooting
+
+**Issue**: "Permission denied" on output directory
+- Solution: `docker-compose down && docker system prune -f`
+
+**Issue**: Container exits immediately
+- Solution: Check logs with `docker-compose logs fide-scraper`
+
+**Issue**: Cron job not running
+- Solution: `crontab -l` to verify job exists, check system mail for errors: `mail`
+- Make sure your user has cron permission: `sudo usermod -a -G cron username`
+
+## Installation (Local Setup)
 
 1. **Install dependencies**:
    ```bash
@@ -30,8 +111,8 @@ I had to step in during the research phase to provide HTML examples that support
 
    Edit `.env` to customize input/output file paths (defaults are used if `.env` doesn't exist):
    ```env
-   FIDE_PLAYERS_FILE=players.csv
-   FIDE_OUTPUT_FILE=fide_ratings.csv
+   FIDE_PLAYERS_FILE=data/players.csv
+   FIDE_OUTPUT_FILE=output/fide_ratings.csv
    ```
 
 ## Usage

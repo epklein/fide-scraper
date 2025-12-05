@@ -1,0 +1,16 @@
+.git
+.gitignore
+.venv
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+.claude
+.cursor
+.vscode
+specs
+tests
+.local
+.env
+README.md
+*.md

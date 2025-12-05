@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  fide-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fide-scraper
+    env_file: .env.docker
+    environment:
+      # Email Notification Settings (from .env or defaults)
+      ADMIN_CC_EMAIL: ${ADMIN_CC_EMAIL}
+      SMTP_SERVER: ${SMTP_SERVER:-mailserver}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+    volumes:
+      # Mount data directory for players.csv input
+      - ./data:/data
+      # Mount output directory for fide_ratings.csv and other results
+      - ./output:/output
+    networks:
+      - fide-network
+    restart: "no"  # Disabled - use cron for scheduling instead
+
+networks:
+  fide-network:
+    driver: bridge
