@@ -18,6 +18,7 @@ import smtplib
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 
 # Load environment variables from .env file
 load_dotenv()
@@ -1010,7 +1011,7 @@ Single Player Mode:
             # Extract FIDE IDs from the loaded player data
             fide_ids = list(player_data.keys())
 
-            print(f"Processing {len(fide_ids)} players from file: {FIDE_PLAYERS_FILE}\n")
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Processing {len(fide_ids)} players from file: {FIDE_PLAYERS_FILE}\n")
 
             # Process batch to fetch ratings
             results, errors = process_batch(fide_ids)
@@ -1020,7 +1021,11 @@ Single Player Mode:
 
             # Display console output
             console_output = format_console_output(results)
+
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Latest FIDE Ratings:\n")
+
             print(console_output)
+            print("")
 
             # Print errors to stderr
             if errors:
@@ -1029,7 +1034,7 @@ Single Player Mode:
 
             # Send email notifications for players with rating changes
             admin_cc_email = os.getenv('ADMIN_CC_EMAIL', '').strip() or None
-            print(f"\nSending email notifications...")
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Sending email notifications...\n")
             email_sent, email_failed = send_batch_notifications(
                 results,
                 player_data,
@@ -1039,10 +1044,12 @@ Single Player Mode:
             # Print summary
             success_count = len(results)
             error_count = len(errors)
-            print(f"\nProcessed {success_count} IDs successfully, {error_count} errors")
-            print(f"Output written to: {OUTPUT_FILENAME}")
+
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Summary:")
+            print(f"- Processed {success_count} IDs successfully, {error_count} errors")
+            print(f"- Output written to: {OUTPUT_FILENAME}")
             if email_sent > 0 or email_failed > 0:
-                print(f"Email notifications: {email_sent} sent, {email_failed} failed")
+                print(f"- Email notifications: {email_sent} sent, {email_failed} failed")
 
             # Exit code: 0 if at least one success, 1 if all failed
             if success_count > 0:
