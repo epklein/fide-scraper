@@ -457,7 +457,8 @@ def detect_rating_changes(
     Detect which player ratings have changed between runs.
 
     Compares current ratings against the most recent historical record for a player.
-    Returns a dictionary of only the changed ratings.
+    Returns a dictionary of only the changed ratings. For new players (not in history),
+    all scraped ratings are notified as changes.
 
     Args:
         fide_id: Player's FIDE ID
@@ -467,7 +468,7 @@ def detect_rating_changes(
 
     Returns:
         Dictionary of changed ratings: {rating_type: (old_value, new_value), ...}
-        Empty dict {} if no changes detected or player is new (not in history)
+        For new players, all ratings are returned as changes with None as old_value.
 
     Examples:
         # Player with rating increase
@@ -478,18 +479,22 @@ def detect_rating_changes(
         )
         # Returns: {"Standard": (2440, 2450)}
 
-        # New player (not in history)
+        # New player (not in history) - all ratings are changes
         changes = detect_rating_changes(
             "99999999",
             {"Standard": 2450, "Rapid": 2300, "Blitz": 2100},
             {}
         )
-        # Returns: {}
+        # Returns: {"Standard": (None, 2450), "Rapid": (None, 2300), "Blitz": (None, 2100)}
     """
     changes = {}
 
-    # If player not in historical data, they're new - no changes to report
+    # If player not in historical data, they're new - report all ratings as changes
     if fide_id not in historical_data:
+        for rating_type in ["Standard", "Rapid", "Blitz"]:
+            new_rating = new_ratings.get(rating_type)
+            if new_rating is not None:
+                changes[rating_type] = (None, new_rating)
         return changes
 
     historical_record = historical_data[fide_id]
@@ -776,6 +781,61 @@ def send_batch_notifications(
             print(f"✗ Error sending email to {fide_id}: {e}", file=sys.stderr)
 
     return sent_count, failed_count
+
+
+def send_batch_api_updates(
+    results: List[Dict],
+    api_config: Dict[str, str]
+) -> Tuple[int, int]:
+    """
+    Send rating updates to external API for profiles with rating changes.
+
+    Processes batch results and sends API updates for players who have detected
+    rating changes. Only profiles with changes are posted to the API.
+
+    Args:
+        results: List of player results from process_batch() with 'changes' key
+        api_config: Dictionary with 'endpoint' and 'token' keys (from load_api_config)
+
+    Returns:
+        Tuple of (posted_count, failed_count) for logging and reporting
+
+    Side Effects:
+        Posts HTTP requests to external API for profiles with changes.
+        Logs all attempts. Continues on errors.
+    """
+    posted_count = 0
+    failed_count = 0
+
+    for profile in results:
+        # Skip if no changes detected
+        changes = profile.get('changes', {})
+        if not changes:
+            continue
+
+        fide_id = profile.get('FIDE ID', 'unknown')
+        player_name = profile.get('Player Name', '')
+
+        try:
+            # Post rating to API
+            success = post_rating_to_api(
+                profile,
+                api_config['endpoint'],
+                api_config['token']
+            )
+
+            if success:
+                posted_count += 1
+                print(f"✓ API update posted for {player_name} ({fide_id})", file=sys.stderr)
+            else:
+                failed_count += 1
+                print(f"✗ Failed to post API update for {player_name} ({fide_id})", file=sys.stderr)
+
+        except Exception as e:
+            failed_count += 1
+            print(f"✗ Error posting API update for {fide_id}: {e}", file=sys.stderr)
+
+    return posted_count, failed_count
 
 
 # === EXTERNAL RATINGS API INTEGRATION ===
@@ -1087,6 +1147,7 @@ def process_batch(fide_ids: List[str], historical_data: Dict[str, Dict] = None) 
 
             # Add to results
             results.append({
+                'Date': date.today().isoformat(),
                 'FIDE ID': fide_id,
                 'Player Name': player_name,
                 'Standard': standard_rating,
@@ -1198,19 +1259,7 @@ Single Player Mode:
             api_config = load_api_config()
             if api_config:
                 print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Posting rating updates to external API...\n")
-                api_posted = 0
-                api_failed = 0
-                for profile in results:
-                    success = post_rating_to_api(
-                        profile,
-                        api_config['endpoint'],
-                        api_config['token']
-                    )
-                    if success:
-                        api_posted += 1
-                    else:
-                        api_failed += 1
-
+                api_posted, api_failed = send_batch_api_updates(results, api_config)
                 print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - API posting complete: {api_posted} successful, {api_failed} failed\n")
             else:
                 api_posted = 0

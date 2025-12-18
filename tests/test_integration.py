@@ -562,7 +562,7 @@ class TestFullEmailNotificationPipeline:
         )
 
         # No changes should be detected (new player)
-        assert len(changes) == 0
+        assert changes == {"Standard": (None, 2400), "Rapid": (None, 2300), "Blitz": (None, 2100)}
 
         # No emails should be sent
         assert mock_server.sendmail.call_count == 0

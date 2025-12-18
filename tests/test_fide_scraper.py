@@ -944,7 +944,11 @@ class TestDetectRatingChanges:
             "99999999", new_ratings, historical_data
         )
 
-        assert changes == {}
+        assert changes == {
+            "Standard": (None, 2440),
+            "Rapid": (None, 2300),
+            "Blitz": (None, 2100)
+        }
 
     def test_detect_rating_changes_all_unrated_to_unrated(self):
         """Test no changes when all ratings remain unrated."""

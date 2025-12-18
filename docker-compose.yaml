@@ -12,6 +12,8 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
+      API_ENDPOINT: ${API_ENDPOINT}
+      API_TOKEN: ${API_TOKEN}
     volumes:
       # Mount data directory for players.csv input
       - ./data:/data
