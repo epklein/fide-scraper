@@ -778,6 +778,159 @@ def send_batch_notifications(
     return sent_count, failed_count
 
 
+# === EXTERNAL RATINGS API INTEGRATION ===
+
+def load_api_config() -> Optional[Dict[str, str]]:
+    """
+    Load API configuration from environment variables.
+
+    Returns:
+        dict with 'endpoint' and 'token' keys if both are configured, None otherwise
+
+    Side Effects:
+        Logs warning if one but not both environment variables are set
+
+    Environment variables:
+        - API_ENDPOINT: Full URL to API endpoint (e.g., https://eduklein.cloud/api/fide-ratings/)
+        - API_TOKEN: Authentication token for the API
+    """
+    endpoint = os.getenv('API_ENDPOINT', '').strip()
+    token = os.getenv('API_TOKEN', '').strip()
+
+    # Both must be set
+    if not endpoint and not token:
+        # Neither set - silent (optional feature)
+        return None
+
+    if endpoint and not token:
+        logging.warning("API_ENDPOINT is set but API_TOKEN is missing - API posting disabled")
+        return None
+
+    if token and not endpoint:
+        logging.warning("API_TOKEN is set but API_ENDPOINT is missing - API posting disabled")
+        return None
+
+    return {'endpoint': endpoint, 'token': token}
+
+
+def should_post_to_api() -> bool:
+    """
+    Determine if API posting is enabled (both config variables present).
+
+    Returns:
+        bool: True if both API_ENDPOINT and API_TOKEN are configured and non-empty
+    """
+    endpoint = os.getenv('API_ENDPOINT', '').strip()
+    token = os.getenv('API_TOKEN', '').strip()
+    return bool(endpoint and token)
+
+
+def post_rating_to_api(
+    profile: Dict,
+    api_endpoint: str,
+    api_token: str,
+    timeout: int = 5,
+    max_retries: int = 1
+) -> bool:
+    """
+    POST a player rating update to external API.
+
+    Args:
+        profile: dict with keys {
+            'Date', 'FIDE ID', 'Player Name',
+            'Standard', 'Rapid', 'Blitz'
+        }
+        api_endpoint: Full URL to POST endpoint
+        api_token: Bearer token for Authorization header
+        timeout: Request timeout in seconds (default 5)
+        max_retries: Number of retries on failure (default 1)
+
+    Returns:
+        bool: True if successful (200 OK), False if failed after retries
+
+    Side Effects:
+        - Logs success to logging.info()
+        - Logs errors to logging.error() with full context
+        - Does NOT raise exceptions on API failures
+
+    Handles:
+        - requests.Timeout: logged as error, retries once, returns False
+        - requests.ConnectionError: logged as error, retries once, returns False
+        - requests.HTTPError: logged with status code, returns False
+        - Unexpected response format: logged as error, returns False
+    """
+    fide_id = profile.get('FIDE ID', 'unknown')
+
+    # Transform profile dict to API request format
+    rating_update = {
+        'date': profile.get('Date'),
+        'fide_id': profile.get('FIDE ID'),
+        'player_name': profile.get('Player Name'),
+        'standard_rating': profile.get('Standard'),
+        'rapid_rating': profile.get('Rapid'),
+        'blitz_rating': profile.get('Blitz')
+    }
+
+    headers = {
+        'Authorization': f'Token {api_token}',
+        'Content-Type': 'application/json'
+    }
+
+    attempt = 0
+    while attempt <= max_retries:
+        try:
+            response = requests.post(
+                api_endpoint,
+                json=rating_update,
+                headers=headers,
+                timeout=timeout
+            )
+
+            # Check for success
+            if response.status_code == 200:
+                logging.info(f"API request successful for FIDE ID {fide_id}: {response.status_code} OK")
+                return True
+            else:
+                # HTTP error (4xx, 5xx, etc.)
+                try:
+                    error_msg = response.json().get('error', 'Unknown error')
+                except:
+                    error_msg = response.text[:200]  # Truncate if too long
+
+                logging.error(f"API returned {response.status_code} for FIDE ID {fide_id}: {error_msg}")
+
+                # Don't retry 4xx errors (client error)
+                if response.status_code >= 400 and response.status_code < 500:
+                    return False
+
+                # Retry on 5xx
+                if attempt < max_retries and response.status_code >= 500:
+                    attempt += 1
+                    continue
+
+                return False
+
+        except requests.Timeout:
+            logging.error(f"API request timeout for FIDE ID {fide_id} after {timeout} seconds (attempt {attempt + 1}/{max_retries + 1})")
+            if attempt < max_retries:
+                attempt += 1
+                continue
+            return False
+
+        except requests.ConnectionError as e:
+            logging.error(f"Failed to connect to API for FIDE ID {fide_id}: {str(e)} (attempt {attempt + 1}/{max_retries + 1})")
+            if attempt < max_retries:
+                attempt += 1
+                continue
+            return False
+
+        except Exception as e:
+            logging.error(f"Unexpected error posting to API for FIDE ID {fide_id}: {str(e)}")
+            return False
+
+    return False
+
+
 def write_csv_output(filename: str, player_profiles: List[Dict]) -> None:
     """
     Write player profiles to CSV file, replacing same-day entries and preserving older entries.
@@ -1041,6 +1194,28 @@ Single Player Mode:
                 admin_cc_email
             )
 
+            # Post ratings updates to external API if configured
+            api_config = load_api_config()
+            if api_config:
+                print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Posting rating updates to external API...\n")
+                api_posted = 0
+                api_failed = 0
+                for profile in results:
+                    success = post_rating_to_api(
+                        profile,
+                        api_config['endpoint'],
+                        api_config['token']
+                    )
+                    if success:
+                        api_posted += 1
+                    else:
+                        api_failed += 1
+
+                print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - API posting complete: {api_posted} successful, {api_failed} failed\n")
+            else:
+                api_posted = 0
+                api_failed = 0
+
             # Print summary
             success_count = len(results)
             error_count = len(errors)
@@ -1050,6 +1225,8 @@ Single Player Mode:
             print(f"- Output written to: {OUTPUT_FILENAME}")
             if email_sent > 0 or email_failed > 0:
                 print(f"- Email notifications: {email_sent} sent, {email_failed} failed")
+            if api_posted > 0 or api_failed > 0:
+                print(f"- API updates: {api_posted} posted, {api_failed} failed")
 
             # Exit code: 0 if at least one success, 1 if all failed
             if success_count > 0:

@@ -1531,3 +1531,289 @@ class TestSendEmailNotification:
         recipients = call_args[0][1]
         assert len(recipients) == 1
         assert recipients[0] == "kate@example.com"
+
+
+# === EXTERNAL RATINGS API INTEGRATION TESTS ===
+
+class TestLoadApiConfig:
+    """Tests for load_api_config() function."""
+
+    @patch.dict(os.environ, {'API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': 'test-token-123'})
+    def test_load_api_config_valid(self):
+        """Test loading valid API configuration from environment."""
+        config = fide_scraper.load_api_config()
+        assert config is not None
+        assert config['endpoint'] == 'https://api.example.com/ratings/'
+        assert config['token'] == 'test-token-123'
+
+    @patch.dict(os.environ, {}, clear=False)
+    def test_load_api_config_missing_both(self):
+        """Test loading API configuration when both variables are missing."""
+        # Remove the variables if they exist
+        for var in ['API_ENDPOINT', 'API_TOKEN']:
+            if var in os.environ:
+                del os.environ[var]
+
+        config = fide_scraper.load_api_config()
+        assert config is None
+
+    @patch.dict(os.environ, {'API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': ''})
+    def test_load_api_config_missing_token(self):
+        """Test loading API configuration when token is missing."""
+        config = fide_scraper.load_api_config()
+        assert config is None
+
+    @patch.dict(os.environ, {'API_ENDPOINT': '', 'API_TOKEN': 'test-token-123'})
+    def test_load_api_config_missing_endpoint(self):
+        """Test loading API configuration when endpoint is missing."""
+        config = fide_scraper.load_api_config()
+        assert config is None
+
+    @patch.dict(os.environ, {'API_ENDPOINT': '  https://api.example.com/ratings/  ', 'API_TOKEN': '  test-token-123  '})
+    def test_load_api_config_strips_whitespace(self):
+        """Test that load_api_config strips whitespace from environment variables."""
+        config = fide_scraper.load_api_config()
+        assert config is not None
+        assert config['endpoint'] == 'https://api.example.com/ratings/'
+        assert config['token'] == 'test-token-123'
+
+
+class TestShouldPostToApi:
+    """Tests for should_post_to_api() helper function."""
+
+    @patch.dict(os.environ, {'API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': 'test-token-123'})
+    def test_should_post_to_api_enabled(self):
+        """Test should_post_to_api returns True when both variables are set."""
+        assert fide_scraper.should_post_to_api() is True
+
+    @patch.dict(os.environ, {}, clear=False)
+    def test_should_post_to_api_disabled_missing_both(self):
+        """Test should_post_to_api returns False when both variables are missing."""
+        for var in ['API_ENDPOINT', 'API_TOKEN']:
+            if var in os.environ:
+                del os.environ[var]
+
+        assert fide_scraper.should_post_to_api() is False
+
+    @patch.dict(os.environ, {'API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': ''})
+    def test_should_post_to_api_disabled_missing_token(self):
+        """Test should_post_to_api returns False when token is missing."""
+        assert fide_scraper.should_post_to_api() is False
+
+
+class TestPostRatingToApi:
+    """Tests for post_rating_to_api() function."""
+
+    @patch('fide_scraper.requests.post')
+    def test_post_rating_to_api_success(self, mock_post):
+        """Test successful API POST request."""
+        # Mock successful 200 response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+
+        profile = {
+            'Date': '2024-12-18',
+            'FIDE ID': '12345678',
+            'Player Name': 'John Doe',
+            'Standard': 2500,
+            'Rapid': 2400,
+            'Blitz': 2300
+        }
+
+        result = fide_scraper.post_rating_to_api(
+            profile,
+            'https://api.example.com/ratings/',
+            'test-token-123'
+        )
+
+        assert result is True
+        mock_post.assert_called_once()
+        call_kwargs = mock_post.call_args[1]
+        assert call_kwargs['headers']['Authorization'] == 'Token test-token-123'
+        assert call_kwargs['json']['fide_id'] == '12345678'
+        assert call_kwargs['json']['player_name'] == 'John Doe'
+
+    @patch('fide_scraper.requests.post')
+    def test_post_rating_to_api_timeout(self, mock_post):
+        """Test API POST request with timeout error."""
+        mock_post.side_effect = requests.Timeout("Connection timeout")
+
+        profile = {
+            'Date': '2024-12-18',
+            'FIDE ID': '12345678',
+            'Player Name': 'John Doe',
+            'Standard': 2500,
+            'Rapid': 2400,
+            'Blitz': 2300
+        }
+
+        result = fide_scraper.post_rating_to_api(
+            profile,
+            'https://api.example.com/ratings/',
+            'test-token-123'
+        )
+
+        assert result is False
+        # Should have been called twice (1 initial + 1 retry)
+        assert mock_post.call_count == 2
+
+    @patch('fide_scraper.requests.post')
+    def test_post_rating_to_api_connection_error(self, mock_post):
+        """Test API POST request with connection error."""
+        mock_post.side_effect = requests.ConnectionError("Connection refused")
+
+        profile = {
+            'Date': '2024-12-18',
+            'FIDE ID': '12345678',
+            'Player Name': 'John Doe',
+            'Standard': 2500,
+            'Rapid': 2400,
+            'Blitz': 2300
+        }
+
+        result = fide_scraper.post_rating_to_api(
+            profile,
+            'https://api.example.com/ratings/',
+            'test-token-123'
+        )
+
+        assert result is False
+        # Should have been called twice (1 initial + 1 retry)
+        assert mock_post.call_count == 2
+
+    @patch('fide_scraper.requests.post')
+    def test_post_rating_to_api_http_400_error(self, mock_post):
+        """Test API POST request with HTTP 400 error (no retry)."""
+        mock_response = Mock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {'error': 'Invalid request'}
+        mock_post.return_value = mock_response
+
+        profile = {
+            'Date': '2024-12-18',
+            'FIDE ID': '12345678',
+            'Player Name': 'John Doe',
+            'Standard': 2500,
+            'Rapid': 2400,
+            'Blitz': 2300
+        }
+
+        result = fide_scraper.post_rating_to_api(
+            profile,
+            'https://api.example.com/ratings/',
+            'test-token-123'
+        )
+
+        assert result is False
+        # Should only be called once (no retry for 4xx)
+        assert mock_post.call_count == 1
+
+    @patch('fide_scraper.requests.post')
+    def test_post_rating_to_api_http_500_error(self, mock_post):
+        """Test API POST request with HTTP 500 error (with retry)."""
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.json.return_value = {'error': 'Server error'}
+        mock_post.return_value = mock_response
+
+        profile = {
+            'Date': '2024-12-18',
+            'FIDE ID': '12345678',
+            'Player Name': 'John Doe',
+            'Standard': 2500,
+            'Rapid': 2400,
+            'Blitz': 2300
+        }
+
+        result = fide_scraper.post_rating_to_api(
+            profile,
+            'https://api.example.com/ratings/',
+            'test-token-123'
+        )
+
+        assert result is False
+        # Should have been called twice (1 initial + 1 retry for 5xx)
+        assert mock_post.call_count == 2
+
+    @patch('fide_scraper.requests.post')
+    def test_post_rating_to_api_http_401_error(self, mock_post):
+        """Test API POST request with HTTP 401 error (authentication error)."""
+        mock_response = Mock()
+        mock_response.status_code = 401
+        mock_response.json.return_value = {'error': 'Unauthorized'}
+        mock_post.return_value = mock_response
+
+        profile = {
+            'Date': '2024-12-18',
+            'FIDE ID': '12345678',
+            'Player Name': 'John Doe',
+            'Standard': 2500,
+            'Rapid': 2400,
+            'Blitz': 2300
+        }
+
+        result = fide_scraper.post_rating_to_api(
+            profile,
+            'https://api.example.com/ratings/',
+            'test-token-123'
+        )
+
+        assert result is False
+        # Should only be called once (no retry for 4xx)
+        assert mock_post.call_count == 1
+
+    @patch('fide_scraper.requests.post')
+    def test_post_rating_to_api_null_ratings(self, mock_post):
+        """Test API POST with null ratings (unrated players)."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+
+        profile = {
+            'Date': '2024-12-18',
+            'FIDE ID': '87654321',
+            'Player Name': 'Jane Doe',
+            'Standard': None,
+            'Rapid': 1900,
+            'Blitz': None
+        }
+
+        result = fide_scraper.post_rating_to_api(
+            profile,
+            'https://api.example.com/ratings/',
+            'test-token-123'
+        )
+
+        assert result is True
+        call_kwargs = mock_post.call_args[1]
+        assert call_kwargs['json']['standard_rating'] is None
+        assert call_kwargs['json']['rapid_rating'] == 1900
+        assert call_kwargs['json']['blitz_rating'] is None
+
+    @patch('fide_scraper.requests.post')
+    def test_post_rating_to_api_timeout_value(self, mock_post):
+        """Test that timeout is passed correctly to requests.post."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+
+        profile = {
+            'Date': '2024-12-18',
+            'FIDE ID': '12345678',
+            'Player Name': 'John Doe',
+            'Standard': 2500,
+            'Rapid': 2400,
+            'Blitz': 2300
+        }
+
+        result = fide_scraper.post_rating_to_api(
+            profile,
+            'https://api.example.com/ratings/',
+            'test-token-123',
+            timeout=5
+        )
+
+        assert result is True
+        call_kwargs = mock_post.call_args[1]
+        assert call_kwargs['timeout'] == 5
