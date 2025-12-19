@@ -16,10 +16,10 @@ COPY fide_scraper.py .
 
 # Create .env with Docker-specific paths (for mounted volumes)
 RUN echo "FIDE_PLAYERS_FILE=/data/players.csv" > .env && \
-    echo "FIDE_OUTPUT_FILE=/output/fide_ratings.csv" >> .env
+    echo "FIDE_OUTPUT_FILE=/data/fide_ratings.csv" >> .env
 
 # Create data and output directories for volume mounts
-RUN mkdir -p /data /output
+RUN mkdir -p /data
 
 # Set default permissions
 #RUN chmod +x fide_scraper.py

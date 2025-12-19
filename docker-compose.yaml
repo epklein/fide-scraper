@@ -15,10 +15,8 @@ services:
       API_ENDPOINT: ${API_ENDPOINT}
       API_TOKEN: ${API_TOKEN}
     volumes:
-      # Mount data directory for players.csv input
+      # Mount data directory for players.csv input and fide_ratings.csv output
       - ./data:/data
-      # Mount output directory for fide_ratings.csv and other results
-      - ./output:/output
     networks:
       - fide-network
     restart: "no"  # Disabled - use cron for scheduling instead
