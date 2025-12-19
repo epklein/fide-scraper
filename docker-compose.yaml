@@ -4,19 +4,18 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: fide-scraper
-    env_file: .env.docker
     environment:
       # Email Notification Settings (from .env or defaults)
       ADMIN_CC_EMAIL: ${ADMIN_CC_EMAIL}
-      SMTP_SERVER: ${SMTP_SERVER:-mailserver}
-      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SERVER: ${SMTP_SERVER}
+      SMTP_PORT: ${SMTP_PORT}
       SMTP_USERNAME: ${SMTP_USERNAME}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       API_ENDPOINT: ${API_ENDPOINT}
       API_TOKEN: ${API_TOKEN}
     volumes:
       # Mount data directory for players.csv input and fide_ratings.csv output
-      - ./data:/data
+      - /data/fide-scraper:/data
     networks:
       - fide-network
     restart: "no"  # Disabled - use cron for scheduling instead
