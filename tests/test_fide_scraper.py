@@ -1542,7 +1542,7 @@ class TestSendEmailNotification:
 class TestLoadApiConfig:
     """Tests for load_api_config() function."""
 
-    @patch.dict(os.environ, {'API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': 'test-token-123'})
+    @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': 'test-token-123'})
     def test_load_api_config_valid(self):
         """Test loading valid API configuration from environment."""
         config = fide_scraper.load_api_config()
@@ -1554,26 +1554,26 @@ class TestLoadApiConfig:
     def test_load_api_config_missing_both(self):
         """Test loading API configuration when both variables are missing."""
         # Remove the variables if they exist
-        for var in ['API_ENDPOINT', 'API_TOKEN']:
+        for var in ['FIDE_RATINGS_API_ENDPOINT', 'API_TOKEN']:
             if var in os.environ:
                 del os.environ[var]
 
         config = fide_scraper.load_api_config()
         assert config is None
 
-    @patch.dict(os.environ, {'API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': ''})
+    @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': ''})
     def test_load_api_config_missing_token(self):
         """Test loading API configuration when token is missing."""
         config = fide_scraper.load_api_config()
         assert config is None
 
-    @patch.dict(os.environ, {'API_ENDPOINT': '', 'API_TOKEN': 'test-token-123'})
+    @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': '', 'API_TOKEN': 'test-token-123'})
     def test_load_api_config_missing_endpoint(self):
         """Test loading API configuration when endpoint is missing."""
         config = fide_scraper.load_api_config()
         assert config is None
 
-    @patch.dict(os.environ, {'API_ENDPOINT': '  https://api.example.com/ratings/  ', 'API_TOKEN': '  test-token-123  '})
+    @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': '  https://api.example.com/ratings/  ', 'API_TOKEN': '  test-token-123  '})
     def test_load_api_config_strips_whitespace(self):
         """Test that load_api_config strips whitespace from environment variables."""
         config = fide_scraper.load_api_config()
@@ -1585,7 +1585,7 @@ class TestLoadApiConfig:
 class TestShouldPostToApi:
     """Tests for should_post_to_api() helper function."""
 
-    @patch.dict(os.environ, {'API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': 'test-token-123'})
+    @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': 'test-token-123'})
     def test_should_post_to_api_enabled(self):
         """Test should_post_to_api returns True when both variables are set."""
         assert fide_scraper.should_post_to_api() is True
@@ -1593,13 +1593,13 @@ class TestShouldPostToApi:
     @patch.dict(os.environ, {}, clear=False)
     def test_should_post_to_api_disabled_missing_both(self):
         """Test should_post_to_api returns False when both variables are missing."""
-        for var in ['API_ENDPOINT', 'API_TOKEN']:
+        for var in ['FIDE_RATINGS_API_ENDPOINT', 'API_TOKEN']:
             if var in os.environ:
                 del os.environ[var]
 
         assert fide_scraper.should_post_to_api() is False
 
-    @patch.dict(os.environ, {'API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': ''})
+    @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': ''})
     def test_should_post_to_api_disabled_missing_token(self):
         """Test should_post_to_api returns False when token is missing."""
         assert fide_scraper.should_post_to_api() is False

@@ -46,7 +46,7 @@ The service reads the external API endpoint URL and authentication token from en
 
 **Acceptance Scenarios**:
 
-1. **Given** environment variables are set with API_ENDPOINT and API_TOKEN, **When** the service starts, **Then** these values are loaded and available for use.
+1. **Given** environment variables are set with FIDE_RATINGS_API_ENDPOINT and API_TOKEN, **When** the service starts, **Then** these values are loaded and available for use.
 2. **Given** missing or invalid environment variables, **When** the service starts, **Then** it logs a clear error indicating which configuration is missing or invalid.
 3. **Given** the service is running with loaded configuration, **When** a ratings update occurs, **Then** the loaded API endpoint and token are used in the request.
 

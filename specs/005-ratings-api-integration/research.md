@@ -116,17 +116,18 @@ INFO: API request successful for FIDE ID 12345678: 200 OK
 
 **Question**: How should the API endpoint and token be configured?
 
-**Decision**: Two environment variables: `API_ENDPOINT` and `API_TOKEN`
+**Decision**: Two environment variables: `FIDE_RATINGS_API_ENDPOINT` and `API_TOKEN`
 
 **Rationale**:
 - Consistent with existing pattern in project (SMTP config via env vars)
 - Matches industry best practice: secrets in environment, not code
 - Already using python-dotenv for configuration
 - Clear separation: endpoint (infrastructure) and token (secret)
+- Specific endpoint name allows for future expansion to other endpoints
 
 **Implementation**:
 ```python
-API_ENDPOINT = os.getenv('API_ENDPOINT')
+FIDE_RATINGS_API_ENDPOINT = os.getenv('FIDE_RATINGS_API_ENDPOINT')
 API_TOKEN = os.getenv('API_TOKEN')
 
 # If both present, enable API posting
@@ -228,7 +229,7 @@ python-dotenv>=1.0.0      # Env vars (✓ needed)
 | Timeout | 5 seconds | HIGH - reasonable default |
 | Logging | stderr via logging module | HIGH - consistent with codebase |
 | Failure mode | Continue locally, log failures | HIGH - per spec assumption |
-| Configuration | API_ENDPOINT + API_TOKEN env vars | HIGH - consistent pattern |
+| Configuration | FIDE_RATINGS_API_ENDPOINT + API_TOKEN env vars | HIGH - consistent pattern |
 | Request format | JSON + Token auth header | HIGH - user-specified |
 | Success indicator | HTTP 200 only | HIGH - user-specified |
 | Dependencies | None new (use existing) | HIGH - verified in requirements.txt |

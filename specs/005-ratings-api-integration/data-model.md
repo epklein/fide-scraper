@@ -313,7 +313,7 @@ if api_enabled:
 **Database/Storage**: No changes required
 - fide_ratings.csv: No schema changes (RatingUpdate is derived from existing fields)
 - players.csv: No schema changes
-- New .env variables: API_ENDPOINT, API_TOKEN (no database impact)
+- New .env variables: FIDE_RATINGS_API_ENDPOINT, API_TOKEN (no database impact)
 
 **Backward Compatibility**: Fully compatible
 - Existing CSV format unchanged

@@ -19,12 +19,12 @@ Add the following to your `.env` file:
 
 ```bash
 # External API Integration
-API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
+FIDE_RATINGS_API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
 API_TOKEN=your-secret-api-token-here
 ```
 
 **Where to get these values**:
-- `API_ENDPOINT`: The full URL to the ratings API endpoint (provided by the API service)
+- `FIDE_RATINGS_API_ENDPOINT`: The full URL to the ratings API endpoint (provided by the API service)
 - `API_TOKEN`: Your authentication token for the API (provided by the API service)
 
 ### 2. Update .env.example
@@ -33,7 +33,7 @@ Keep the example file updated for documentation:
 
 ```bash
 # External API Integration
-API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
+FIDE_RATINGS_API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
 API_TOKEN=your-api-token-here
 ```
 
@@ -58,7 +58,7 @@ python fide_scraper.py --batch --notify
 
 ### API Posting Behavior
 
-**If both `API_ENDPOINT` and `API_TOKEN` are configured**:
+**If both `FIDE_RATINGS_API_ENDPOINT` and `API_TOKEN` are configured**:
 - After each player's ratings are scraped and stored locally
 - A POST request is sent to the configured API endpoint
 - Success/failure is logged to stderr
@@ -137,7 +137,7 @@ INFO: Continuing with next player...
 
 ```bash
 # .env for local development
-API_ENDPOINT=http://localhost:8000/api/fide-ratings/
+FIDE_RATINGS_API_ENDPOINT=http://localhost:8000/api/fide-ratings/
 API_TOKEN=dev-token-12345
 ```
 
@@ -145,7 +145,7 @@ API_TOKEN=dev-token-12345
 
 ```bash
 # .env for production deployment
-API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
+FIDE_RATINGS_API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
 API_TOKEN=${API_TOKEN}  # Use secret management system
 ```
 
@@ -153,7 +153,7 @@ API_TOKEN=${API_TOKEN}  # Use secret management system
 
 ```bash
 # .env with API disabled (empty token)
-API_ENDPOINT=
+FIDE_RATINGS_API_ENDPOINT=
 API_TOKEN=
 # Results: API posting skipped, scraper works normally
 ```
@@ -169,7 +169,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-api_endpoint = os.getenv('API_ENDPOINT')
+api_endpoint = os.getenv('FIDE_RATINGS_API_ENDPOINT')
 api_token = os.getenv('API_TOKEN')
 
 if api_endpoint and api_token:
@@ -212,7 +212,7 @@ python fide_scraper.py 12345678  # Scrape and re-POST
 **Symptom**: Multiple "ConnectionError" messages in logs
 
 **Diagnosis**:
-1. Check `API_ENDPOINT` value: `grep API_ENDPOINT .env`
+1. Check `FIDE_RATINGS_API_ENDPOINT` value: `grep FIDE_RATINGS_API_ENDPOINT .env`
 2. Test connectivity: `curl -I https://eduklein.cloud/api/fide-ratings/`
 3. Check firewall/network access
 
@@ -256,7 +256,7 @@ python fide_scraper.py 12345678  # Scrape and re-POST
 
 ```bash
 # Verify environment variables are loaded
-python -c "import os; from dotenv import load_dotenv; load_dotenv(); print(f'Endpoint: {os.getenv(\"API_ENDPOINT\")}'); print(f'Token set: {bool(os.getenv(\"API_TOKEN\"))}')"
+python -c "import os; from dotenv import load_dotenv; load_dotenv(); print(f'Endpoint: {os.getenv(\"FIDE_RATINGS_API_ENDPOINT\")}'); print(f'Token set: {bool(os.getenv(\"API_TOKEN\"))}')"
 ```
 
 ### Manual API Test (using requests)
@@ -269,7 +269,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-endpoint = os.getenv('API_ENDPOINT')
+endpoint = os.getenv('FIDE_RATINGS_API_ENDPOINT')
 token = os.getenv('API_TOKEN')
 
 if not endpoint or not token:
@@ -323,7 +323,7 @@ services:
   fide-scraper:
     image: fide-scraper:latest
     environment:
-      API_ENDPOINT: ${API_ENDPOINT}
+      FIDE_RATINGS_API_ENDPOINT: ${FIDE_RATINGS_API_ENDPOINT}
       API_TOKEN: ${API_TOKEN}
     # ... rest of config
 ```
@@ -331,7 +331,7 @@ services:
 Run with environment variables:
 
 ```bash
-export API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
+export FIDE_RATINGS_API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
 export API_TOKEN=your-token-here
 docker-compose up
 ```
@@ -354,7 +354,7 @@ metadata:
   name: fide-api-config
 type: Opaque
 stringData:
-  API_ENDPOINT: https://eduklein.cloud/api/fide-ratings/
+  FIDE_RATINGS_API_ENDPOINT: https://eduklein.cloud/api/fide-ratings/
   API_TOKEN: your-token-here
 ---
 apiVersion: batch/v1
@@ -401,8 +401,8 @@ Failures in one integration don't affect the others:
 
 ## Troubleshooting Checklist
 
-- [ ] Verify `API_ENDPOINT` and `API_TOKEN` in `.env`
-- [ ] Test connectivity: `curl -I $API_ENDPOINT`
+- [ ] Verify `FIDE_RATINGS_API_ENDPOINT` and `API_TOKEN` in `.env`
+- [ ] Test connectivity: `curl -I $FIDE_RATINGS_API_ENDPOINT`
 - [ ] Check logs: `grep "API" scraper.log`
 - [ ] Verify token validity with API provider
 - [ ] Check network/firewall access

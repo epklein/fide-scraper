@@ -243,7 +243,7 @@ Content-Length: {length}
 ## Implementation Checklist
 
 ### Request Construction
-- [ ] Read API_ENDPOINT and API_TOKEN from environment
+- [ ] Read FIDE_RATINGS_API_ENDPOINT and API_TOKEN from environment
 - [ ] Validate both environment variables present
 - [ ] Build JSON body with exact field names (snake_case)
 - [ ] Add Authorization header with Token format

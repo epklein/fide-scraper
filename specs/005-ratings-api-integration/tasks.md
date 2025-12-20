@@ -31,7 +31,7 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [x] T004 Create load_api_config() function skeleton in `/home/epklein/Sources/fide-scraper/fide_scraper.py` to load API_ENDPOINT and API_TOKEN from environment
+- [x] T004 Create load_api_config() function skeleton in `/home/epklein/Sources/fide-scraper/fide_scraper.py` to load FIDE_RATINGS_API_ENDPOINT and API_TOKEN from environment
 - [x] T005 Create should_post_to_api() helper function in `/home/epklein/Sources/fide-scraper/fide_scraper.py` to check if both config variables are present
 - [x] T006 Create post_rating_to_api() function skeleton in `/home/epklein/Sources/fide-scraper/fide_scraper.py` with timeout (5s) and retry (1x) configuration
 - [x] T007 Add comprehensive logging imports and configuration to `/home/epklein/Sources/fide-scraper/fide_scraper.py` for API request tracking
@@ -71,12 +71,12 @@
 
 ### Implementation for User Story 2
 
-- [x] T018 [US2] Implement load_api_config() function to read API_ENDPOINT and API_TOKEN from environment in `/home/epklein/Sources/fide-scraper/fide_scraper.py`
+- [x] T018 [US2] Implement load_api_config() function to read FIDE_RATINGS_API_ENDPOINT and API_TOKEN from environment in `/home/epklein/Sources/fide-scraper/fide_scraper.py`
 - [x] T019 [US2] Add validation in load_api_config() to ensure both variables are present, log clear error if missing in `/home/epklein/Sources/fide-scraper/fide_scraper.py`
 - [x] T020 [US2] Call load_api_config() at application startup in main() function in `/home/epklein/Sources/fide-scraper/fide_scraper.py`
 - [x] T021 [US2] Ensure loaded API endpoint and token are accessible to batch processing loop in `/home/epklein/Sources/fide-scraper/fide_scraper.py`
 - [x] T022 [P] [US2] Write pytest unit test test_load_api_config_valid() in `/home/epklein/Sources/fide-scraper/tests/test_fide_scraper.py` (mock environment with both variables set)
-- [x] T023 [P] [US2] Write pytest unit test test_load_api_config_missing_endpoint() in `/home/epklein/Sources/fide-scraper/tests/test_fide_scraper.py` (missing API_ENDPOINT, should raise ValueError)
+- [x] T023 [P] [US2] Write pytest unit test test_load_api_config_missing_endpoint() in `/home/epklein/Sources/fide-scraper/tests/test_fide_scraper.py` (missing FIDE_RATINGS_API_ENDPOINT, should raise ValueError)
 - [x] T024 [P] [US2] Write pytest unit test test_load_api_config_missing_token() in `/home/epklein/Sources/fide-scraper/tests/test_fide_scraper.py` (missing API_TOKEN, should raise ValueError)
 - [x] T025 [US2] Write pytest unit test test_should_post_to_api() in `/home/epklein/Sources/fide-scraper/tests/test_fide_scraper.py` (both present: True; missing either: False)
 
@@ -134,9 +134,9 @@
 - [x] T047 [P] Code review: verify all logging statements include sufficient context for debugging in `/home/epklein/Sources/fide-scraper/fide_scraper.py`
 - [x] T048 [P] Verify requests library timeout behavior matches 5-second specification in `/home/epklein/Sources/fide-scraper/fide_scraper.py`
 - [x] T049 Validate Docker configuration still works with new environment variables in `/home/epklein/Sources/fide-scraper/docker-compose.yaml`
-- [x] T050 Test with Docker: verify API_ENDPOINT and API_TOKEN are properly injected from environment in `/home/epklein/Sources/fide-scraper/docker-compose.yaml`
+- [x] T050 Test with Docker: verify FIDE_RATINGS_API_ENDPOINT and API_TOKEN are properly injected from environment in `/home/epklein/Sources/fide-scraper/docker-compose.yaml`
 - [x] T051 [P] Run linting/formatting (if configured) on all modified files
-- [x] T052 Verify backward compatibility: existing scraper functionality unchanged when API_ENDPOINT/API_TOKEN not set
+- [x] T052 Verify backward compatibility: existing scraper functionality unchanged when FIDE_RATINGS_API_ENDPOINT/API_TOKEN not set
 - [x] T053 Final: Execute fide_scraper.py --batch with mock API endpoint and verify all output is correct
 
 **Checkpoint**: Feature is production-ready

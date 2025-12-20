@@ -23,5 +23,5 @@
               SMTP_PORT=${{ vars.SMTP_PORT }}
               SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}
               SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
-              API_ENDPOINT=${{ vars.API_ENDPOINT }}
+              FIDE_RATINGS_API_ENDPOINT=${{ vars.FIDE_RATINGS_API_ENDPOINT }}
               API_TOKEN=${{ secrets.API_TOKEN }}

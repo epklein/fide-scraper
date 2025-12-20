@@ -851,10 +851,10 @@ def load_api_config() -> Optional[Dict[str, str]]:
         Logs warning if one but not both environment variables are set
 
     Environment variables:
-        - API_ENDPOINT: Full URL to API endpoint (e.g., https://eduklein.cloud/api/fide-ratings/)
+        - FIDE_RATINGS_API_ENDPOINT: Full URL to API endpoint (e.g., https://eduklein.cloud/api/fide-ratings/)
         - API_TOKEN: Authentication token for the API
     """
-    endpoint = os.getenv('API_ENDPOINT', '').strip()
+    endpoint = os.getenv('FIDE_RATINGS_API_ENDPOINT', '').strip()
     token = os.getenv('API_TOKEN', '').strip()
 
     # Both must be set
@@ -863,11 +863,11 @@ def load_api_config() -> Optional[Dict[str, str]]:
         return None
 
     if endpoint and not token:
-        logging.warning("API_ENDPOINT is set but API_TOKEN is missing - API posting disabled")
+        logging.warning("FIDE_RATINGS_API_ENDPOINT is set but API_TOKEN is missing - API posting disabled")
         return None
 
     if token and not endpoint:
-        logging.warning("API_TOKEN is set but API_ENDPOINT is missing - API posting disabled")
+        logging.warning("API_TOKEN is set but FIDE_RATINGS_API_ENDPOINT is missing - API posting disabled")
         return None
 
     return {'endpoint': endpoint, 'token': token}
@@ -878,9 +878,9 @@ def should_post_to_api() -> bool:
     Determine if API posting is enabled (both config variables present).
 
     Returns:
-        bool: True if both API_ENDPOINT and API_TOKEN are configured and non-empty
+        bool: True if both FIDE_RATINGS_API_ENDPOINT and API_TOKEN are configured and non-empty
     """
-    endpoint = os.getenv('API_ENDPOINT', '').strip()
+    endpoint = os.getenv('FIDE_RATINGS_API_ENDPOINT', '').strip()
     token = os.getenv('API_TOKEN', '').strip()
     return bool(endpoint and token)
 
