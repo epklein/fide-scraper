@@ -32,6 +32,7 @@ The Docker setup includes:
 - **Input**: `players.csv` mounted from `./data/` on host
 - **Output**: Results saved to `./output/fide_ratings.csv` on the host
 - **SMTP**: Optional MailHog service for email testing
+- **FIDE IDs API** (optional): Automatic player file augmentation from external API endpoint (see External API Integration section for details)
 
 **Directory structure:**
 ```
@@ -324,6 +325,17 @@ The script uses environment variables to configure input, output, and email sett
 - **`SMTP_PORT`**: SMTP server port (default: `587`)
 - **`SMTP_USERNAME`**: SMTP authentication username (optional)
 - **`SMTP_PASSWORD`**: SMTP authentication password (optional)
+
+#### External API Integration
+- **`FIDE_IDS_API_ENDPOINT`**: URL to fetch additional FIDE IDs from external API (optional)
+  - Example: `https://eduklein.cloud/api/fide-ids/`
+  - When set, the scraper augments the players file with IDs from this API before rating retrieval
+  - If not set or API is unavailable, scraper proceeds with existing players file only
+- **`API_TOKEN`**: Authentication token for external APIs (required if using FIDE_IDS_API_ENDPOINT or FIDE_RATINGS_API_ENDPOINT)
+  - Format: Token will be sent as `Authorization: Token {API_TOKEN}`
+- **`FIDE_RATINGS_API_ENDPOINT`**: URL to post rating updates to external service (optional)
+  - Example: `https://eduklein.cloud/api/fide-ratings/`
+  - When set, each rating update is posted to this endpoint after scraping
 
 ### Setting Environment Variables
 

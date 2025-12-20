@@ -386,6 +386,312 @@ def load_player_data_from_csv(filepath: str) -> Dict[str, Dict[str, str]]:
     return player_data
 
 
+def load_csv_fide_ids(filepath: str) -> List[str]:
+    """
+    Extract FIDE IDs from existing CSV file.
+
+    Reads the CSV file and extracts all FIDE IDs from the 'FIDE ID' column.
+    Invalid IDs are skipped with warnings logged. Returns a list of string IDs.
+
+    Args:
+        filepath: Path to the CSV file (typically FIDE_PLAYERS_FILE)
+
+    Returns:
+        List of FIDE ID strings from the CSV file (can be empty if no valid IDs)
+
+    Side Effects:
+        Logs warnings to stderr for invalid entries that are skipped
+        Does NOT validate email column, just extracts FIDE IDs
+    """
+    fide_ids = []
+
+    try:
+        with open(filepath, 'r', newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+
+            # Validate headers
+            if reader.fieldnames is None:
+                logging.warning(f"CSV file is empty: {filepath}")
+                return fide_ids
+
+            if 'FIDE ID' not in reader.fieldnames:
+                logging.warning(f"CSV file missing 'FIDE ID' column in: {filepath}")
+                return fide_ids
+
+            # Extract FIDE IDs
+            for row_num, row in enumerate(reader, start=2):  # Start at 2 (skip header)
+                fide_id = row.get('FIDE ID', '').strip() if row.get('FIDE ID') is not None else ''
+
+                # Validate FIDE ID format
+                if fide_id and validate_fide_id(fide_id):
+                    fide_ids.append(fide_id)
+                elif fide_id:
+                    # Invalid FIDE ID format
+                    logging.warning(f"Line {row_num} in {filepath}: Invalid FIDE ID '{fide_id}' (skipped)")
+
+    except FileNotFoundError:
+        logging.warning(f"Player data file not found: {filepath}")
+    except PermissionError:
+        logging.warning(f"Permission denied reading file: {filepath}")
+    except UnicodeDecodeError as e:
+        logging.warning(f"Unable to decode file {filepath} as UTF-8: {e}")
+    except Exception as e:
+        logging.warning(f"Error reading CSV file {filepath}: {e}")
+
+    return fide_ids
+
+
+def load_existing_ids(filepath: str) -> List[str]:
+    """
+    Safely load FIDE IDs from CSV file with error handling.
+
+    Wrapper around load_csv_fide_ids() that handles the case where file may not exist.
+    Returns empty list if file doesn't exist or can't be read (graceful degradation).
+
+    Args:
+        filepath: Path to the CSV file
+
+    Returns:
+        List of FIDE ID strings, or empty list if file doesn't exist/can't be read
+    """
+    if not os.path.exists(filepath):
+        logging.info(f"Players file does not exist yet: {filepath}")
+        return []
+
+    return load_csv_fide_ids(filepath)
+
+
+def fetch_fide_ids_from_api(api_endpoint: str, api_token: str) -> Optional[List[str]]:
+    """
+    Fetch FIDE IDs from external API endpoint.
+
+    Sends a GET request to the configured API endpoint with token authentication.
+    Parses the JSON response and extracts the fide_ids array as strings.
+    Handles all errors gracefully - returns None if API is unavailable and logs details.
+
+    Args:
+        api_endpoint: Full URL to API endpoint (e.g., https://eduklein.cloud/api/fide-ids/)
+        api_token: Authentication token for API (sent as Authorization: Token <token>)
+
+    Returns:
+        List of FIDE ID strings if successful, None if API unavailable/fails
+
+    Side Effects:
+        Logs all outcomes (success, errors, counts) using logging module
+    """
+    # Validate inputs
+    if not api_endpoint or not api_endpoint.strip():
+        logging.info("FIDE_IDS_API_ENDPOINT not configured")
+        return None
+
+    if not api_token or not api_token.strip():
+        logging.info("API_TOKEN not configured for FIDE IDs API")
+        return None
+
+    try:
+        # Prepare headers with token authentication
+        headers = {
+            "Authorization": f"Token {api_token}",
+            "Accept": "application/json"
+        }
+
+        # Send GET request with 30 second timeout
+        logging.info(f"Fetching FIDE IDs from API: {api_endpoint}")
+        response = requests.get(api_endpoint, headers=headers, timeout=30)
+
+        # Check HTTP status code
+        if response.status_code == 401:
+            logging.error("API authentication failed (401): Invalid or missing API token")
+            return None
+        elif response.status_code == 403:
+            logging.error("API permission denied (403): Token does not have permission to access this endpoint")
+            return None
+        elif response.status_code == 404:
+            logging.error(f"API endpoint not found (404): {api_endpoint}")
+            return None
+        elif response.status_code >= 500:
+            logging.error(f"API server error ({response.status_code}): {response.text[:200]}")
+            return None
+        elif not response.ok:
+            logging.error(f"API request failed with status {response.status_code}: {response.text[:200]}")
+            return None
+
+        # Parse JSON response
+        try:
+            data = response.json()
+        except requests.exceptions.JSONDecodeError as e:
+            logging.error(f"API response is not valid JSON: {e}")
+            return None
+
+        # Validate response structure
+        if not isinstance(data, dict):
+            logging.error(f"API response is not a JSON object: {type(data)}")
+            return None
+
+        if 'fide_ids' not in data:
+            logging.error("API response missing 'fide_ids' field")
+            return None
+
+        fide_ids_data = data.get('fide_ids')
+        if not isinstance(fide_ids_data, list):
+            logging.error(f"API response 'fide_ids' is not an array: {type(fide_ids_data)}")
+            return None
+
+        # Validate that all IDs are strings
+        fide_ids = []
+        for fide_id in fide_ids_data:
+            if isinstance(fide_id, str):
+                fide_ids.append(fide_id)
+            else:
+                logging.warning(f"API response contains non-string FIDE ID: {fide_id} (type: {type(fide_id).__name__})")
+
+        # Log success
+        api_count = len(data.get('fide_ids', []))
+        valid_count = len(fide_ids)
+        logging.info(f"Successfully fetched {api_count} FIDE IDs from API ({valid_count} valid strings)")
+
+        return fide_ids if fide_ids else None
+
+    except requests.exceptions.Timeout:
+        logging.error("API request timed out after 30 seconds")
+        return None
+    except requests.exceptions.ConnectionError as e:
+        logging.error(f"Connection error to API endpoint: {e}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"API request failed: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"Unexpected error fetching FIDE IDs from API: {e}")
+        return None
+
+
+def merge_player_ids(csv_ids: List[str], api_ids: List[str]) -> Tuple[List[str], List[str]]:
+    """
+    Merge FIDE IDs from CSV and API, with deduplication.
+
+    Combines IDs from both sources using set operations to eliminate duplicates.
+    Returns both the complete sorted list of unique IDs and the new IDs from API.
+
+    Args:
+        csv_ids: List of FIDE IDs from existing CSV file
+        api_ids: List of FIDE IDs from API response
+
+    Returns:
+        Tuple of:
+        - all_ids: Sorted list of all unique IDs (CSV union API)
+        - new_ids: List of IDs only from API (API minus CSV)
+    """
+    csv_set = set(csv_ids) if csv_ids else set()
+    api_set = set(api_ids) if api_ids else set()
+
+    # Compute union and new IDs
+    all_ids = sorted(list(csv_set | api_set))
+    new_ids = sorted(list(api_set - csv_set))
+
+    # Log merge summary
+    csv_count = len(csv_set)
+    api_count = len(api_set)
+    total_count = len(all_ids)
+    new_count = len(new_ids)
+
+    logging.info(f"Merge summary: {csv_count} CSV IDs + {api_count} API IDs → {total_count} unique IDs, +{new_count} new")
+
+    return all_ids, new_ids
+
+
+def augment_players_file(csv_path: str, new_ids: List[str]) -> bool:
+    """
+    Append new FIDE IDs to existing CSV file while preserving format.
+
+    Reads the existing CSV file to detect format (dialect, delimiters, quoting).
+    Preserves all existing rows exactly and appends new rows for each new ID.
+    Returns True if successful, False if any error occurred (with logging).
+
+    Args:
+        csv_path: Path to FIDE_PLAYERS_FILE CSV file
+        new_ids: List of new IDs to append (from merge operation)
+
+    Returns:
+        True if successful, False if error occurred (logged)
+
+    Side Effects:
+        - Updates the CSV file with new rows
+        - Logs all outcomes and errors
+        - On error, preserves original file (no corruption)
+    """
+    if not new_ids:
+        logging.info("No new IDs to append to players file")
+        return True
+
+    try:
+        # Read existing file to detect format and preserve rows
+        existing_rows = []
+        dialect = 'excel'  # Default dialect
+
+        if os.path.exists(csv_path):
+            try:
+                with open(csv_path, 'r', newline='', encoding='utf-8') as csvfile:
+                    # Detect dialect
+                    sample = csvfile.read(1024)
+                    csvfile.seek(0)
+                    try:
+                        dialect = csv.Sniffer().sniff(sample)
+                    except csv.Error:
+                        dialect = 'excel'  # Fall back to default
+
+                    # Read all existing rows
+                    csvfile.seek(0)
+                    reader = csv.DictReader(csvfile, dialect=dialect)
+
+                    if reader.fieldnames is None:
+                        logging.warning(f"CSV file is empty or unreadable: {csv_path}")
+                        existing_rows = []
+                    else:
+                        for row in reader:
+                            existing_rows.append(row)
+
+            except Exception as e:
+                logging.warning(f"Error reading existing CSV file {csv_path}: {e}")
+                # Continue with empty rows if we can't read
+                existing_rows = []
+        else:
+            logging.info(f"Players file does not exist, will create: {csv_path}")
+
+        # Determine headers
+        headers = ['FIDE ID', 'email']
+
+        # Write updated file
+        try:
+            with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=headers, dialect=dialect)
+
+                # Write header
+                writer.writeheader()
+
+                # Write existing rows
+                for row in existing_rows:
+                    writer.writerow(row)
+
+                # Write new rows for each new ID
+                for new_id in new_ids:
+                    writer.writerow({'FIDE ID': new_id, 'email': ''})
+
+            logging.info(f"Updated players file: {csv_path} - added {len(new_ids)} new IDs")
+            return True
+
+        except IOError as e:
+            logging.error(f"Error writing to players file {csv_path}: {e}")
+            return False
+        except Exception as e:
+            logging.error(f"Unexpected error updating players file {csv_path}: {e}")
+            return False
+
+    except Exception as e:
+        logging.error(f"Unexpected error in augment_players_file: {e}")
+        return False
+
+
 def load_historical_ratings_by_player(filepath: str) -> Dict[str, Dict[str, any]]:
     """
     Load historical ratings from CSV file and index by FIDE ID.
@@ -1215,6 +1521,26 @@ Single Player Mode:
     # Batch processing mode (default)
     if not args.fide_id:
         try:
+            # Augment players file with FIDE IDs from API if configured
+            api_endpoint = os.getenv('FIDE_IDS_API_ENDPOINT', '').strip()
+            api_token = os.getenv('API_TOKEN', '').strip()
+
+            if api_endpoint and api_token:
+                logging.info("FIDE IDs API is configured, attempting to fetch and augment players file")
+                api_ids = fetch_fide_ids_from_api(api_endpoint, api_token)
+                if api_ids:
+                    csv_ids = load_existing_ids(FIDE_PLAYERS_FILE)
+                    all_ids, new_ids = merge_player_ids(csv_ids, api_ids)
+                    success = augment_players_file(FIDE_PLAYERS_FILE, new_ids)
+                    if success:
+                        logging.info(f"Players file successfully augmented with {len(new_ids)} new FIDE IDs from API")
+                    else:
+                        logging.warning("Failed to augment players file; continuing with existing file")
+                else:
+                    logging.warning("Failed to fetch FIDE IDs from API; continuing with existing players file")
+            else:
+                logging.info("FIDE IDs API is not configured (optional feature)")
+
             # Load player data from CSV file (includes FIDE IDs and emails)
             player_data = load_player_data_from_csv(FIDE_PLAYERS_FILE)
 

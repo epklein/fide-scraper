@@ -11,6 +11,8 @@ services:
       SMTP_PORT: ${SMTP_PORT}
       SMTP_USERNAME: ${SMTP_USERNAME}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
+      # External API Integration (optional)
+      FIDE_IDS_API_ENDPOINT: ${FIDE_IDS_API_ENDPOINT}
       FIDE_RATINGS_API_ENDPOINT: ${FIDE_RATINGS_API_ENDPOINT}
       API_TOKEN: ${API_TOKEN}
     volumes:

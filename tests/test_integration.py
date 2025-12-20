@@ -847,3 +847,449 @@ class TestSendBatchNotifications:
         assert sent == 0
         assert failed == 0
         assert mock_server.sendmail.call_count == 0
+
+
+@pytest.mark.integration
+class TestFideIdsApiIntegration:
+    """Integration tests for FIDE IDs API augmentation feature."""
+
+    @patch('fide_scraper.requests.get')
+    def test_fetch_fide_ids_api_success(self, mock_get):
+        """Test successful API fetch with valid response."""
+        # Mock successful API response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "fide_ids": ["12345678", "23456789", "34567890"],
+            "count": 3
+        }
+        mock_get.return_value = mock_response
+
+        # Test fetch
+        result = fide_scraper.fetch_fide_ids_from_api(
+            "https://eduklein.cloud/api/fide-ids/",
+            "test_token"
+        )
+
+        assert result is not None
+        assert len(result) == 3
+        assert "12345678" in result
+        assert "23456789" in result
+        assert "34567890" in result
+        
+        # Verify API was called correctly
+        mock_get.assert_called_once()
+        call_args = mock_get.call_args
+        assert "Authorization" in call_args[1]["headers"]
+        assert call_args[1]["headers"]["Authorization"] == "Token test_token"
+
+    @patch('fide_scraper.requests.get')
+    def test_fetch_fide_ids_api_empty_response(self, mock_get):
+        """Test API fetch with empty fide_ids array."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "fide_ids": [],
+            "count": 0
+        }
+        mock_get.return_value = mock_response
+
+        result = fide_scraper.fetch_fide_ids_from_api(
+            "https://eduklein.cloud/api/fide-ids/",
+            "test_token"
+        )
+
+        # Empty array should return None
+        assert result is None
+
+    @patch('fide_scraper.requests.get')
+    def test_fetch_fide_ids_api_auth_error(self, mock_get):
+        """Test API fetch with authentication failure (401)."""
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_get.return_value = mock_response
+
+        result = fide_scraper.fetch_fide_ids_from_api(
+            "https://eduklein.cloud/api/fide-ids/",
+            "invalid_token"
+        )
+
+        assert result is None
+
+    @patch('fide_scraper.requests.get')
+    def test_fetch_fide_ids_api_timeout(self, mock_get):
+        """Test API fetch with timeout."""
+        import requests
+        mock_get.side_effect = requests.exceptions.Timeout()
+
+        result = fide_scraper.fetch_fide_ids_from_api(
+            "https://eduklein.cloud/api/fide-ids/",
+            "test_token"
+        )
+
+        assert result is None
+
+    def test_merge_player_ids_no_duplicates(self):
+        """Test merge with no overlapping IDs."""
+        csv_ids = ["100", "200", "300"]
+        api_ids = ["400", "500"]
+
+        all_ids, new_ids = fide_scraper.merge_player_ids(csv_ids, api_ids)
+
+        assert len(all_ids) == 5
+        assert new_ids == ["400", "500"]
+
+    def test_merge_player_ids_with_duplicates(self):
+        """Test merge with overlapping IDs."""
+        csv_ids = ["100", "200", "300"]
+        api_ids = ["200", "300", "400", "500"]
+
+        all_ids, new_ids = fide_scraper.merge_player_ids(csv_ids, api_ids)
+
+        assert len(all_ids) == 5
+        assert set(all_ids) == {"100", "200", "300", "400", "500"}
+        assert new_ids == ["400", "500"]
+
+    def test_merge_player_ids_empty_csv(self):
+        """Test merge with empty CSV."""
+        csv_ids = []
+        api_ids = ["100", "200", "300"]
+
+        all_ids, new_ids = fide_scraper.merge_player_ids(csv_ids, api_ids)
+
+        assert len(all_ids) == 3
+        assert new_ids == ["100", "200", "300"]
+
+    def test_augment_players_file_creates_new_file(self, tmp_path):
+        """Test augment_players_file creates file if it doesn't exist."""
+        csv_file = tmp_path / "players.csv"
+        new_ids = ["12345678", "23456789"]
+
+        result = fide_scraper.augment_players_file(str(csv_file), new_ids)
+
+        assert result is True
+        assert csv_file.exists()
+
+        # Verify file content
+        with open(csv_file, 'r') as f:
+            content = f.read()
+            assert "FIDE ID" in content
+            assert "12345678" in content
+            assert "23456789" in content
+
+    def test_augment_players_file_appends_to_existing(self, tmp_path):
+        """Test augment_players_file appends to existing file."""
+        # Create initial file
+        csv_file = tmp_path / "players.csv"
+        with open(csv_file, 'w') as f:
+            f.write("FIDE ID,email\n")
+            f.write("11111111,alice@example.com\n")
+            f.write("22222222,bob@example.com\n")
+
+        # Augment with new IDs
+        new_ids = ["33333333", "44444444"]
+        result = fide_scraper.augment_players_file(str(csv_file), new_ids)
+
+        assert result is True
+
+        # Verify all IDs are present
+        with open(csv_file, 'r') as f:
+            content = f.read()
+            assert "11111111" in content  # Original
+            assert "22222222" in content  # Original
+            assert "33333333" in content  # New
+            assert "44444444" in content  # New
+
+    def test_augment_players_file_empty_new_ids(self, tmp_path):
+        """Test augment_players_file with no new IDs."""
+        csv_file = tmp_path / "players.csv"
+        
+        result = fide_scraper.augment_players_file(str(csv_file), [])
+
+        # Should succeed but not create file
+        assert result is True
+
+    @patch('fide_scraper.requests.get')
+    def test_api_augmentation_full_flow(self, mock_get, tmp_path):
+        """Test complete API augmentation flow."""
+        # Setup
+        csv_file = tmp_path / "players.csv"
+        with open(csv_file, 'w') as f:
+            f.write("FIDE ID,email\n")
+            f.write("11111111,alice@example.com\n")
+
+        # Mock API response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "fide_ids": ["11111111", "22222222", "33333333"],
+            "count": 3
+        }
+        mock_get.return_value = mock_response
+
+        # Execute flow
+        api_ids = fide_scraper.fetch_fide_ids_from_api(
+            "https://eduklein.cloud/api/fide-ids/",
+            "test_token"
+        )
+        assert api_ids is not None
+
+        csv_ids = fide_scraper.load_existing_ids(str(csv_file))
+        all_ids, new_ids = fide_scraper.merge_player_ids(csv_ids, api_ids)
+        
+        assert new_ids == ["22222222", "33333333"]
+
+        result = fide_scraper.augment_players_file(str(csv_file), new_ids)
+        assert result is True
+
+        # Verify final file
+        final_ids = fide_scraper.load_csv_fide_ids(str(csv_file))
+        assert set(final_ids) == {"11111111", "22222222", "33333333"}
+
+    @patch('fide_scraper.requests.get')
+    def test_graceful_degradation_api_unavailable(self, mock_get, tmp_path):
+        """Test scraper continues when API is unavailable."""
+        import requests
+        
+        # Setup
+        csv_file = tmp_path / "players.csv"
+        with open(csv_file, 'w') as f:
+            f.write("FIDE ID,email\n")
+            f.write("12345678,test@example.com\n")
+
+        # Mock API failure
+        mock_get.side_effect = requests.exceptions.ConnectionError()
+
+        # API fetch should fail gracefully
+        api_ids = fide_scraper.fetch_fide_ids_from_api(
+            "https://eduklein.cloud/api/fide-ids/",
+            "test_token"
+        )
+        assert api_ids is None
+
+        # But loading existing file should still work
+        csv_ids = fide_scraper.load_existing_ids(str(csv_file))
+        assert csv_ids == ["12345678"]
+
+
+# Phase 7: Edge Case Testing and Polish
+
+class TestPhase7EdgeCases:
+    """Tests for Phase 7 edge cases and deployment readiness."""
+
+    @patch('fide_scraper.requests.get')
+    def test_missing_api_configuration(self, mock_get, tmp_path):
+        """T024: Test with missing/invalid API configuration to verify graceful handling."""
+        # Setup CSV file
+        csv_file = tmp_path / "players.csv"
+        with open(csv_file, 'w') as f:
+            f.write("FIDE ID,email\n")
+            f.write("11111111,test@example.com\n")
+
+        # Test with empty endpoint
+        result = fide_scraper.fetch_fide_ids_from_api("", "test_token")
+        assert result is None
+        assert not mock_get.called, "API should not be called with empty endpoint"
+
+        # Test with empty token
+        result = fide_scraper.fetch_fide_ids_from_api(
+            "https://eduklein.cloud/api/fide-ids/", ""
+        )
+        assert result is None
+        assert not mock_get.called, "API should not be called with empty token"
+
+        # Test with None values
+        result = fide_scraper.fetch_fide_ids_from_api(None, None)
+        assert result is None
+
+        # CSV should still be loadable
+        csv_ids = fide_scraper.load_existing_ids(str(csv_file))
+        assert csv_ids == ["11111111"]
+
+    def test_malformed_csv_file_handling(self, tmp_path):
+        """T025: Test with malformed CSV file to verify error recovery."""
+        # Test 1: CSV with missing FIDE ID column
+        malformed_csv = tmp_path / "malformed1.csv"
+        with open(malformed_csv, 'w') as f:
+            f.write("email,name\n")
+            f.write("test@example.com,Test Player\n")
+
+        result = fide_scraper.load_csv_fide_ids(str(malformed_csv))
+        assert result == [], "Should return empty list for CSV missing FIDE ID column"
+
+        # Test 2: CSV with invalid FIDE IDs
+        malformed_csv2 = tmp_path / "malformed2.csv"
+        with open(malformed_csv2, 'w') as f:
+            f.write("FIDE ID,email\n")
+            f.write("abc,test@example.com\n")
+            f.write("123,invalid@example.com\n")  # Too short
+            f.write("11111111,valid@example.com\n")  # Valid
+
+        result = fide_scraper.load_csv_fide_ids(str(malformed_csv2))
+        assert result == ["11111111"], "Should skip invalid IDs and return only valid ones"
+
+        # Test 3: Empty CSV
+        empty_csv = tmp_path / "empty.csv"
+        with open(empty_csv, 'w') as f:
+            f.write("")
+
+        result = fide_scraper.load_existing_ids(str(empty_csv))
+        assert result == [], "Should handle empty CSV gracefully"
+
+        # Test 4: CSV with only headers
+        header_only_csv = tmp_path / "headers_only.csv"
+        with open(header_only_csv, 'w') as f:
+            f.write("FIDE ID,email\n")
+
+        result = fide_scraper.load_csv_fide_ids(str(header_only_csv))
+        assert result == [], "Should return empty list for CSV with only headers"
+
+    @patch('fide_scraper.requests.get')
+    def test_large_api_response_performance(self, mock_get, tmp_path):
+        """T026: Test with large API response (1000+ IDs) to verify performance (<10 seconds)."""
+        import time
+
+        # Setup CSV with some existing IDs
+        csv_file = tmp_path / "players.csv"
+        with open(csv_file, 'w') as f:
+            f.write("FIDE ID,email\n")
+            for i in range(100):
+                f.write(f"{1000000 + i},player{i}@example.com\n")
+
+        # Create large API response (1000 IDs)
+        large_fide_ids = [f"{2000000 + i}" for i in range(1000)]
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"fide_ids": large_fide_ids, "count": 1000}
+        mock_get.return_value = mock_response
+
+        # Measure performance
+        start_time = time.time()
+
+        # API fetch
+        api_ids = fide_scraper.fetch_fide_ids_from_api(
+            "https://eduklein.cloud/api/fide-ids/",
+            "test_token"
+        )
+        assert api_ids is not None
+        assert len(api_ids) == 1000
+
+        # CSV load
+        csv_ids = fide_scraper.load_existing_ids(str(csv_file))
+        assert len(csv_ids) == 100
+
+        # Merge
+        all_ids, new_ids = fide_scraper.merge_player_ids(csv_ids, api_ids)
+        assert len(all_ids) == 1100
+        assert len(new_ids) == 1000
+
+        # Augment
+        result = fide_scraper.augment_players_file(str(csv_file), new_ids)
+        assert result is True
+
+        elapsed_time = time.time() - start_time
+
+        # Verify performance requirement: <10 seconds
+        assert elapsed_time < 10, f"Performance test failed: took {elapsed_time:.2f}s (must be <10s)"
+
+        # Verify file integrity
+        final_ids = fide_scraper.load_csv_fide_ids(str(csv_file))
+        assert len(final_ids) == 1100
+
+    def test_error_message_clarity(self, tmp_path):
+        """T027: Verify error messages are clear and actionable for operators."""
+        # Test 1: Missing file returns empty gracefully
+        result = fide_scraper.load_existing_ids("/nonexistent/path/players.csv")
+        assert result == [], "Should return empty list for missing file"
+
+        # Test 2: Invalid CSV column returns empty
+        invalid_csv = tmp_path / "invalid.csv"
+        with open(invalid_csv, 'w') as f:
+            f.write("email,name\n")
+
+        result = fide_scraper.load_csv_fide_ids(str(invalid_csv))
+        assert result == [], "Should return empty list for CSV missing FIDE ID column"
+
+        # Test 3: Verify error handling in API calls
+        # Empty endpoint should gracefully return None
+        result = fide_scraper.fetch_fide_ids_from_api("", "token")
+        assert result is None, "Should return None for empty endpoint"
+
+        # Empty token should gracefully return None
+        result = fide_scraper.fetch_fide_ids_from_api("https://example.com/api/", "")
+        assert result is None, "Should return None for empty token"
+
+        # Test 4: CSV with invalid IDs logs warning but continues
+        invalid_ids_csv = tmp_path / "invalid_ids.csv"
+        with open(invalid_ids_csv, 'w') as f:
+            f.write("FIDE ID,email\n")
+            f.write("abc,test@example.com\n")  # Invalid: non-numeric
+            f.write("12,test2@example.com\n")  # Invalid: too short
+            f.write("11111111,valid@example.com\n")  # Valid
+
+        result = fide_scraper.load_csv_fide_ids(str(invalid_ids_csv))
+        assert result == ["11111111"], "Should skip invalid IDs and continue"
+
+    def test_graceful_degradation_mixed_scenario(self, tmp_path):
+        """T029: Verify system degradation when components fail (CSV exists, API fails)."""
+        # Setup CSV file
+        csv_file = tmp_path / "players.csv"
+        with open(csv_file, 'w') as f:
+            f.write("FIDE ID,email\n")
+            f.write("11111111,test@example.com\n")
+            f.write("22222222,test2@example.com\n")
+
+        # API fails
+        api_ids = None  # Simulates API failure
+
+        # Merge should handle None API gracefully
+        csv_ids = fide_scraper.load_existing_ids(str(csv_file))
+        if api_ids is None:
+            api_ids = []
+
+        all_ids, new_ids = fide_scraper.merge_player_ids(csv_ids, api_ids)
+        assert all_ids == ["11111111", "22222222"]
+        assert new_ids == []
+
+        # Augment with no new IDs (should be no-op)
+        result = fide_scraper.augment_players_file(str(csv_file), new_ids)
+        assert result is True
+
+        # File should be unchanged
+        final_ids = fide_scraper.load_csv_fide_ids(str(csv_file))
+        assert set(final_ids) == {"11111111", "22222222"}
+
+    def test_csv_dialect_preservation_edge_cases(self, tmp_path):
+        """T028: Verify CSV format preservation in various dialects."""
+        # Test 1: Tab-delimited CSV
+        tab_csv = tmp_path / "tab_delimited.csv"
+        with open(tab_csv, 'w') as f:
+            f.write("FIDE ID\temail\n")
+            f.write("11111111\ttest@example.com\n")
+
+        # Augment with new ID
+        new_ids = ["99999999"]
+        result = fide_scraper.augment_players_file(str(tab_csv), new_ids)
+        assert result is True
+
+        # Verify content
+        with open(tab_csv, 'r') as f:
+            content = f.read()
+            # Should still have tab delimiter
+            lines = content.split('\n')
+            assert '\t' in lines[0], "Tab delimiter should be preserved"
+
+        # Test 2: CSV with quoted fields
+        quoted_csv = tmp_path / "quoted.csv"
+        with open(quoted_csv, 'w') as f:
+            f.write('"FIDE ID","email"\n')
+            f.write('"11111111","test@example.com"\n')
+
+        new_ids = ["77777777"]
+        result = fide_scraper.augment_players_file(str(quoted_csv), new_ids)
+        assert result is True
+
+        # Should still be readable
+        final_ids = fide_scraper.load_csv_fide_ids(str(quoted_csv))
+        assert "11111111" in final_ids
+        assert "77777777" in final_ids
