@@ -158,6 +158,12 @@ def augment_players_file(csv_path: str, new_ids: List[str]) -> bool:
 def main():
     # ... existing initialization code ...
 
+    # NEW: Load player data from CSV file
+    try:
+        player_data = load_player_data_from_csv(FIDE_PLAYERS_FILE)
+    except FileNotFoundError:
+        player_data = {}
+
     # NEW: Load API configuration
     api_endpoint = os.getenv('FIDE_IDS_API_ENDPOINT', '').strip()
     api_token = os.getenv('API_TOKEN', '').strip()
@@ -166,11 +172,13 @@ def main():
     if api_endpoint and api_token:
         api_ids = fetch_fide_ids_from_api(api_endpoint, api_token)
         if api_ids:
-            csv_ids = load_existing_ids(FIDE_PLAYERS_FILE)
+            csv_ids = list(player_data.keys())
             all_ids, new_ids = merge_player_ids(csv_ids, api_ids)
             success = augment_players_file(FIDE_PLAYERS_FILE, new_ids)
             if success:
                 logging.info(f"Players file augmented with {len(new_ids)} new IDs")
+                # Reload player data after augmenting
+                player_data = load_player_data_from_csv(FIDE_PLAYERS_FILE)
 
     # ... rest of existing scraping logic (unchanged) ...
 ```

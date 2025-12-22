@@ -87,21 +87,6 @@ FIDE ID,Player Name,Standard,Rapid,Blitz
 2016192,Hikaru Nakamura,2758,2800,2790
 ```
 
-### Single FIDE ID Mode (Existing Feature)
-
-The existing single FIDE ID processing mode continues to work:
-
-```bash
-python fide_scraper.py 538026660
-```
-
-**Output**:
-```
-Standard: 2830
-Rapid: 2780
-Blitz: 2760
-```
-
 ## Example Scenarios
 
 ### Scenario 1: Process Multiple Players

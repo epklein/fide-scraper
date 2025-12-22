@@ -1,10 +1,8 @@
 # FIDE Rating Scraper
 
-A simple Python script that scrapes the FIDE website to retrieve current chess ratings for players by their FIDE ID.
+A Python script that scrapes the FIDE website to retrieve current chess ratings for players by their FIDE ID.
 
-**Note:** This project is my first experiment using [spec-kit](https://github.com/github/spec-kit) for structured, machine-readable specs. I've implemented it within the [Cursor](https://www.cursor.so/) editor.
-
-I had to step in during the research phase to provide HTML examples that support the planning phase for proper implementation of the scraping code.
+**Note:** This project is my first experiment using [spec-kit](https://github.com/github/spec-kit) for structured, machine-readable specs. I've implemented it within the [VSCode](https://code.visualstudio.com/) editors.
 
 ## Prerequisites
 
@@ -50,11 +48,11 @@ The Docker setup includes:
 
 ### Output Files
 
-Results are written to `./output/fide_ratings.csv` on your host machine (mounted from container).
+Results are written to `/data/fide_ratings.csv` on your host machine (mounted from container).
 
 ### Scheduled Execution with Cron
 
-To run the scraper automatically every 2 hours (recommended for production):
+To run the scraper automatically every 2 hours:
 
 **Step 1: Setup cron job**
 ```bash
@@ -81,18 +79,6 @@ crontab -r                # Remove cron job
 - Logs saved to `logs/scraper.log`
 - No container auto-restart needed
 
-### Troubleshooting
-
-**Issue**: "Permission denied" on output directory
-- Solution: `docker-compose down && docker system prune -f`
-
-**Issue**: Container exits immediately
-- Solution: Check logs with `docker-compose logs fide-scraper`
-
-**Issue**: Cron job not running
-- Solution: `crontab -l` to verify job exists, check system mail for errors: `mail`
-- Make sure your user has cron permission: `sudo usermod -a -G cron username`
-
 ## Installation (Local Setup)
 
 1. **Install dependencies**:
@@ -112,34 +98,15 @@ crontab -r                # Remove cron job
 
    Edit `.env` to customize input/output file paths (defaults are used if `.env` doesn't exist):
    ```env
-   FIDE_PLAYERS_FILE=data/players.csv
-   FIDE_OUTPUT_FILE=output/fide_ratings.csv
+   FIDE_PLAYERS_FILE=/data/players.csv
+   FIDE_OUTPUT_FILE=/data/fide_ratings.csv
    ```
 
 ## Usage
 
-The script supports two modes: **Batch Processing mode** (default, for multiple players from a file) and **Single FIDE ID mode** (for one player).
+The script operates in **Batch Processing mode**, processing multiple players from a file.
 
-### Single FIDE ID Mode
-
-Run the script with a FIDE ID as an argument:
-
-```bash
-python fide_scraper.py 538026660
-```
-
-**Example Output**:
-```
-Standard: 2830
-Rapid: 2780
-Blitz: 2760
-```
-
-### Batch Processing Mode
-
-Process multiple FIDE IDs from a file and output results to both a CSV file and the console.
-
-#### Step 1: Prepare Input File
+### Step 1: Prepare Input File
 
 Create a text file containing FIDE IDs, one per line:
 
@@ -156,7 +123,7 @@ FIDE ID,email
 - Whitespace around IDs is automatically stripped
 - File should be UTF-8 encoded
 
-#### Step 2: Run Batch Processing
+### Step 2: Run Batch Processing
 
 Simply run the script without arguments (it will use the configured input file):
 
@@ -172,7 +139,7 @@ FIDE_PLAYERS_FILE=players.csv
 FIDE_OUTPUT_FILE=ratings_history.csv
 ```
 
-#### Step 3: View Results
+### Step 3: View Results
 
 **Console Output**:
 ```
@@ -385,25 +352,3 @@ Run specific test file:
 ```bash
 pytest tests/test_fide_scraper.py
 ```
-
-## Troubleshooting
-
-### "Module not found" error
-- Ensure dependencies are installed: `pip install -r requirements.txt`
-
-### Network timeout errors
-- Check your internet connection
-- FIDE website may be temporarily unavailable
-- Try again after a few moments
-- In batch mode, individual timeouts won't stop processing of remaining IDs
-
-### "Player not found" error
-- Verify the FIDE ID is correct
-- Check that the player exists on the FIDE website
-- Ensure the FIDE ID is numeric only
-- In batch mode, these errors are logged but don't stop processing
-
-### Parsing errors
-- FIDE website structure may have changed
-- Check if the website is accessible in a browser
-- Report the issue if the website structure has changed

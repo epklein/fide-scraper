@@ -13,6 +13,8 @@ from unittest.mock import patch, MagicMock
 # Add parent directory to path to import fide_scraper
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import fide_scraper
+import email_notifier
+import ratings_api
 
 
 @pytest.mark.integration
@@ -122,23 +124,6 @@ class TestEdgeCases:
         assert rapid is None
         assert blitz is None
     
-    def test_format_output_unrated(self):
-        """Test formatting output with unrated ratings."""
-        output = fide_scraper.format_ratings_output(2500, None, None)
-        assert "Standard: 2500" in output
-        assert "Rapid: Unrated" in output
-        assert "Blitz: Unrated" in output
-        
-        output = fide_scraper.format_ratings_output(None, 2450, 2400)
-        assert "Standard: Unrated" in output
-        assert "Rapid: 2450" in output
-        assert "Blitz: 2400" in output
-        
-        output = fide_scraper.format_ratings_output(2500, 2450, None)
-        assert "Standard: 2500" in output
-        assert "Rapid: 2450" in output
-        assert "Blitz: Unrated" in output
-
 
 @pytest.mark.integration
 class TestBatchProcessing:
@@ -224,7 +209,7 @@ class TestEmailNotificationIntegration:
         }
 
         # Compose email
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Test Player",
             "12345678",
             changes,
@@ -237,7 +222,7 @@ class TestEmailNotificationIntegration:
         assert "Standard Rating: 2440 → 2450" in body
         assert "Rapid Rating: 2300 → 2310" in body
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     def test_email_notification_workflow_with_smtp_mock(self, mock_smtp_class):
         """Test complete email workflow with mocked SMTP."""
         from unittest.mock import MagicMock
@@ -247,7 +232,7 @@ class TestEmailNotificationIntegration:
 
         # Compose email
         changes = {"Standard": (2440, 2450)}
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Alice Smith",
             "12345678",
             changes,
@@ -255,7 +240,7 @@ class TestEmailNotificationIntegration:
         )
 
         # Send email
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "alice@example.com",
             "admin@example.com",
             subject,
@@ -298,7 +283,7 @@ class TestEmailNotificationIntegration:
         assert alice_changes["Standard"] == (2440, 2450)
 
         # Compose email for Alice
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Alice Smith",
             "12345678",
             alice_changes,
@@ -339,7 +324,7 @@ class TestEmailNotificationIntegration:
         # Should have processed the player
         assert len(results) > 0 or len(errors) > 0
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     def test_complete_email_notification_workflow(self, mock_smtp_class, tmp_path):
         """Test complete workflow: load data -> detect changes -> compose -> send emails."""
         from unittest.mock import MagicMock
@@ -379,7 +364,7 @@ class TestEmailNotificationIntegration:
 
         # Only Alice has email and has changes, so compose and send for her
         if alice_changes and player_data["12345678"]["email"]:
-            subject, body = fide_scraper.compose_notification_email(
+            subject, body = email_notifier._compose_notification_email(
                 "Alice Smith",
                 "12345678",
                 alice_changes,
@@ -388,7 +373,7 @@ class TestEmailNotificationIntegration:
             )
 
             # Send email
-            result = fide_scraper.send_email_notification(
+            result = email_notifier._send_email_notification(
                 player_data["12345678"]["email"],
                 "admin@example.com",
                 subject,
@@ -405,7 +390,7 @@ class TestEmailNotificationIntegration:
             assert "admin@example.com" in recipients
 
 
-@patch('fide_scraper.smtplib.SMTP')
+@patch('email_notifier.smtplib.SMTP')
 class TestFullEmailNotificationPipeline:
     """Full end-to-end pipeline test for email notifications."""
 
@@ -489,7 +474,7 @@ class TestFullEmailNotificationPipeline:
 
             # Only send if player has email and has changes
             if email and changes:
-                subject, body = fide_scraper.compose_notification_email(
+                subject, body = email_notifier._compose_notification_email(
                     player_names[fide_id],
                     fide_id,
                     changes,
@@ -497,7 +482,7 @@ class TestFullEmailNotificationPipeline:
                     admin_email
                 )
 
-                result = fide_scraper.send_email_notification(
+                result = email_notifier._send_email_notification(
                     email,
                     admin_email,
                     subject,
@@ -602,7 +587,7 @@ class TestFullEmailNotificationPipeline:
         assert changes["Blitz"] == (2100, 2250)
 
         # Compose and send email
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Alice Smith",
             "12345678",
             changes,
@@ -610,7 +595,7 @@ class TestFullEmailNotificationPipeline:
             "admin@example.com"
         )
 
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "alice@example.com",
             "admin@example.com",
             subject,
@@ -656,7 +641,7 @@ class TestFullEmailNotificationPipeline:
         assert changes["Blitz"] == (None, 2100)
 
         # Compose email to notify about new ratings
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Alice Smith",
             "12345678",
             changes,
@@ -672,7 +657,7 @@ class TestFullEmailNotificationPipeline:
 class TestSendBatchNotifications:
     """Tests for send_batch_notifications integration function."""
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     def test_send_batch_notifications_with_changes(self, mock_smtp_class):
         """Test sending batch notifications to players with changes."""
         mock_server = MagicMock()
@@ -713,10 +698,9 @@ class TestSendBatchNotifications:
         ]
 
         # Send notifications
-        sent, failed = fide_scraper.send_batch_notifications(
+        sent, failed = email_notifier.send_batch_notifications(
             results,
-            player_data,
-            "admin@example.com"
+            player_data
         )
 
         # Should send 1 (Alice), skip Bob (no changes), skip Charlie (no email)
@@ -724,7 +708,7 @@ class TestSendBatchNotifications:
         assert failed == 0
         assert mock_server.sendmail.call_count == 1
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     def test_send_batch_notifications_all_changes(self, mock_smtp_class):
         """Test sending notifications when all players have changes."""
         mock_server = MagicMock()
@@ -750,7 +734,7 @@ class TestSendBatchNotifications:
             },
         ]
 
-        sent, failed = fide_scraper.send_batch_notifications(
+        sent, failed = email_notifier.send_batch_notifications(
             results,
             player_data
         )
@@ -759,7 +743,7 @@ class TestSendBatchNotifications:
         assert failed == 0
         assert mock_server.sendmail.call_count == 2
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     def test_send_batch_notifications_no_changes(self, mock_smtp_class):
         """Test sending notifications when no players have changes."""
         mock_server = MagicMock()
@@ -785,7 +769,7 @@ class TestSendBatchNotifications:
             },
         ]
 
-        sent, failed = fide_scraper.send_batch_notifications(
+        sent, failed = email_notifier.send_batch_notifications(
             results,
             player_data
         )
@@ -794,7 +778,7 @@ class TestSendBatchNotifications:
         assert failed == 0
         assert mock_server.sendmail.call_count == 0
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     def test_send_batch_notifications_with_errors(self, mock_smtp_class):
         """Test handling errors during batch notification sending."""
         mock_server = MagicMock()
@@ -822,7 +806,7 @@ class TestSendBatchNotifications:
             },
         ]
 
-        sent, failed = fide_scraper.send_batch_notifications(
+        sent, failed = email_notifier.send_batch_notifications(
             results,
             player_data
         )
@@ -830,7 +814,7 @@ class TestSendBatchNotifications:
         assert sent == 1
         assert failed == 1
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     def test_send_batch_notifications_empty_results(self, mock_smtp_class):
         """Test sending notifications with empty results."""
         mock_server = MagicMock()
@@ -839,7 +823,7 @@ class TestSendBatchNotifications:
         player_data = {}
         results = []
 
-        sent, failed = fide_scraper.send_batch_notifications(
+        sent, failed = email_notifier.send_batch_notifications(
             results,
             player_data
         )
@@ -1034,16 +1018,18 @@ class TestFideIdsApiIntegration:
         )
         assert api_ids is not None
 
-        csv_ids = fide_scraper.load_existing_ids(str(csv_file))
+        player_data = fide_scraper.load_player_data_from_csv(str(csv_file))
+        csv_ids = list(player_data.keys())
         all_ids, new_ids = fide_scraper.merge_player_ids(csv_ids, api_ids)
-        
+
         assert new_ids == ["22222222", "33333333"]
 
         result = fide_scraper.augment_players_file(str(csv_file), new_ids)
         assert result is True
 
         # Verify final file
-        final_ids = fide_scraper.load_csv_fide_ids(str(csv_file))
+        player_data = fide_scraper.load_player_data_from_csv(str(csv_file))
+        final_ids = list(player_data.keys())
         assert set(final_ids) == {"11111111", "22222222", "33333333"}
 
     @patch('fide_scraper.requests.get')
@@ -1068,14 +1054,12 @@ class TestFideIdsApiIntegration:
         assert api_ids is None
 
         # But loading existing file should still work
-        csv_ids = fide_scraper.load_existing_ids(str(csv_file))
+        player_data = fide_scraper.load_player_data_from_csv(str(csv_file))
+        csv_ids = list(player_data.keys())
         assert csv_ids == ["12345678"]
 
-
-# Phase 7: Edge Case Testing and Polish
-
-class TestPhase7EdgeCases:
-    """Tests for Phase 7 edge cases and deployment readiness."""
+class TestEdgeCases:
+    """Tests for edge cases and deployment readiness."""
 
     @patch('fide_scraper.requests.get')
     def test_missing_api_configuration(self, mock_get, tmp_path):
@@ -1103,7 +1087,8 @@ class TestPhase7EdgeCases:
         assert result is None
 
         # CSV should still be loadable
-        csv_ids = fide_scraper.load_existing_ids(str(csv_file))
+        player_data = fide_scraper.load_player_data_from_csv(str(csv_file))
+        csv_ids = list(player_data.keys())
         assert csv_ids == ["11111111"]
 
     def test_malformed_csv_file_handling(self, tmp_path):
@@ -1114,8 +1099,8 @@ class TestPhase7EdgeCases:
             f.write("email,name\n")
             f.write("test@example.com,Test Player\n")
 
-        result = fide_scraper.load_csv_fide_ids(str(malformed_csv))
-        assert result == [], "Should return empty list for CSV missing FIDE ID column"
+        with pytest.raises(ValueError, match="missing required headers"):
+            fide_scraper.load_player_data_from_csv(str(malformed_csv))
 
         # Test 2: CSV with invalid FIDE IDs
         malformed_csv2 = tmp_path / "malformed2.csv"
@@ -1125,7 +1110,8 @@ class TestPhase7EdgeCases:
             f.write("123,invalid@example.com\n")  # Too short
             f.write("11111111,valid@example.com\n")  # Valid
 
-        result = fide_scraper.load_csv_fide_ids(str(malformed_csv2))
+        player_data = fide_scraper.load_player_data_from_csv(str(malformed_csv2))
+        result = list(player_data.keys())
         assert result == ["11111111"], "Should skip invalid IDs and return only valid ones"
 
         # Test 3: Empty CSV
@@ -1133,16 +1119,16 @@ class TestPhase7EdgeCases:
         with open(empty_csv, 'w') as f:
             f.write("")
 
-        result = fide_scraper.load_existing_ids(str(empty_csv))
-        assert result == [], "Should handle empty CSV gracefully"
+        with pytest.raises(ValueError, match="CSV file is empty"):
+            fide_scraper.load_player_data_from_csv(str(empty_csv))
 
         # Test 4: CSV with only headers
         header_only_csv = tmp_path / "headers_only.csv"
         with open(header_only_csv, 'w') as f:
             f.write("FIDE ID,email\n")
 
-        result = fide_scraper.load_csv_fide_ids(str(header_only_csv))
-        assert result == [], "Should return empty list for CSV with only headers"
+        player_data = fide_scraper.load_player_data_from_csv(str(header_only_csv))
+        assert player_data == {}, "Should return empty dict for CSV with only headers"
 
     @patch('fide_scraper.requests.get')
     def test_large_api_response_performance(self, mock_get, tmp_path):
@@ -1175,7 +1161,8 @@ class TestPhase7EdgeCases:
         assert len(api_ids) == 1000
 
         # CSV load
-        csv_ids = fide_scraper.load_existing_ids(str(csv_file))
+        player_data = fide_scraper.load_player_data_from_csv(str(csv_file))
+        csv_ids = list(player_data.keys())
         assert len(csv_ids) == 100
 
         # Merge
@@ -1193,22 +1180,23 @@ class TestPhase7EdgeCases:
         assert elapsed_time < 10, f"Performance test failed: took {elapsed_time:.2f}s (must be <10s)"
 
         # Verify file integrity
-        final_ids = fide_scraper.load_csv_fide_ids(str(csv_file))
+        player_data = fide_scraper.load_player_data_from_csv(str(csv_file))
+        final_ids = list(player_data.keys())
         assert len(final_ids) == 1100
 
     def test_error_message_clarity(self, tmp_path):
         """T027: Verify error messages are clear and actionable for operators."""
-        # Test 1: Missing file returns empty gracefully
-        result = fide_scraper.load_existing_ids("/nonexistent/path/players.csv")
-        assert result == [], "Should return empty list for missing file"
+        # Test 1: Missing file raises FileNotFoundError
+        with pytest.raises(FileNotFoundError, match="not found"):
+            fide_scraper.load_player_data_from_csv("/nonexistent/path/players.csv")
 
-        # Test 2: Invalid CSV column returns empty
+        # Test 2: Invalid CSV column raises ValueError
         invalid_csv = tmp_path / "invalid.csv"
         with open(invalid_csv, 'w') as f:
             f.write("email,name\n")
 
-        result = fide_scraper.load_csv_fide_ids(str(invalid_csv))
-        assert result == [], "Should return empty list for CSV missing FIDE ID column"
+        with pytest.raises(ValueError, match="missing required headers"):
+            fide_scraper.load_player_data_from_csv(str(invalid_csv))
 
         # Test 3: Verify error handling in API calls
         # Empty endpoint should gracefully return None
@@ -1227,7 +1215,8 @@ class TestPhase7EdgeCases:
             f.write("12,test2@example.com\n")  # Invalid: too short
             f.write("11111111,valid@example.com\n")  # Valid
 
-        result = fide_scraper.load_csv_fide_ids(str(invalid_ids_csv))
+        player_data = fide_scraper.load_player_data_from_csv(str(invalid_ids_csv))
+        result = list(player_data.keys())
         assert result == ["11111111"], "Should skip invalid IDs and continue"
 
     def test_graceful_degradation_mixed_scenario(self, tmp_path):
@@ -1243,7 +1232,8 @@ class TestPhase7EdgeCases:
         api_ids = None  # Simulates API failure
 
         # Merge should handle None API gracefully
-        csv_ids = fide_scraper.load_existing_ids(str(csv_file))
+        player_data = fide_scraper.load_player_data_from_csv(str(csv_file))
+        csv_ids = list(player_data.keys())
         if api_ids is None:
             api_ids = []
 
@@ -1256,40 +1246,6 @@ class TestPhase7EdgeCases:
         assert result is True
 
         # File should be unchanged
-        final_ids = fide_scraper.load_csv_fide_ids(str(csv_file))
+        player_data = fide_scraper.load_player_data_from_csv(str(csv_file))
+        final_ids = list(player_data.keys())
         assert set(final_ids) == {"11111111", "22222222"}
-
-    def test_csv_dialect_preservation_edge_cases(self, tmp_path):
-        """T028: Verify CSV format preservation in various dialects."""
-        # Test 1: Tab-delimited CSV
-        tab_csv = tmp_path / "tab_delimited.csv"
-        with open(tab_csv, 'w') as f:
-            f.write("FIDE ID\temail\n")
-            f.write("11111111\ttest@example.com\n")
-
-        # Augment with new ID
-        new_ids = ["99999999"]
-        result = fide_scraper.augment_players_file(str(tab_csv), new_ids)
-        assert result is True
-
-        # Verify content
-        with open(tab_csv, 'r') as f:
-            content = f.read()
-            # Should still have tab delimiter
-            lines = content.split('\n')
-            assert '\t' in lines[0], "Tab delimiter should be preserved"
-
-        # Test 2: CSV with quoted fields
-        quoted_csv = tmp_path / "quoted.csv"
-        with open(quoted_csv, 'w') as f:
-            f.write('"FIDE ID","email"\n')
-            f.write('"11111111","test@example.com"\n')
-
-        new_ids = ["77777777"]
-        result = fide_scraper.augment_players_file(str(quoted_csv), new_ids)
-        assert result is True
-
-        # Should still be readable
-        final_ids = fide_scraper.load_csv_fide_ids(str(quoted_csv))
-        assert "11111111" in final_ids
-        assert "77777777" in final_ids

@@ -197,7 +197,7 @@ Then sequential:
 3. ✅ Complete Phase 3: User Story 1 (T009-T017) - can POST ratings to API
 4. **STOP and VALIDATE**:
    - Run `pytest tests/test_fide_scraper.py -k US1` to test independently
-   - Execute `python fide_scraper.py <single_fide_id>` and verify POST request sent
+   - Execute `python fide_scraper.py` and verify POST request sent for each rating
    - Check logs for successful transmission
 5. **Deploy MVP**: Feature is now operational for basic use case
 

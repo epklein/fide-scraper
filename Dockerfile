@@ -11,8 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code only
-COPY fide_scraper.py .
+# Copy application code
+COPY *.py .
 
 # Create data and output directories for volume mounts
 RUN mkdir -p /data && chmod 777 /data

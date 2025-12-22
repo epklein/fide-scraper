@@ -7,7 +7,7 @@
 
 ## Summary
 
-Extend the existing FIDE rating scraper to support batch processing of multiple FIDE IDs from an input file. The script will process each FIDE ID, extract player names and ratings, and output results to both a CSV file (with date-stamped filename) and the console. This feature builds on the existing single-ID scraper functionality and adds file I/O, CSV generation, player name extraction, and batch error handling.
+Implement batch processing of multiple FIDE IDs from an input file. The script will process each FIDE ID, extract player names and ratings, and output results to both a CSV file (with date-stamped filename) and the console. This feature adds file I/O, CSV generation, player name extraction, and batch error handling.
 
 ## Technical Context
 
@@ -42,7 +42,7 @@ Extend the existing FIDE rating scraper to support batch processing of multiple 
 
 ### III. Simplicity ✅
 - **Status**: PASS
-- **Rationale**: Feature adds moderate complexity (file I/O, CSV generation, batch processing) but builds on existing patterns. Uses standard library modules, no new external dependencies. Batch processing logic is sequential and straightforward. Maintains backward compatibility with single FIDE ID mode. Complexity is justified by user value (bulk processing capability).
+- **Rationale**: Feature adds moderate complexity (file I/O, CSV generation, batch processing). Uses standard library modules, no new external dependencies. Batch processing logic is sequential and straightforward. Complexity is justified by user value (bulk processing capability).
 
 **Overall**: All constitution gates pass. Feature extends existing functionality with well-defined additions. Technical unknowns resolved in research.md. Design artifacts (data-model.md, contracts/, quickstart.md) complete.
 
@@ -72,7 +72,7 @@ tests/
 └── test_integration.py     # Integration tests (will be extended with batch tests)
 ```
 
-**Structure Decision**: Extend existing single script. The project maintains its flat structure with the main script at the root. Batch processing functionality will be added to the existing script, maintaining backward compatibility with single FIDE ID processing.
+**Structure Decision**: Single script. The project maintains its flat structure with the main script at the root. Batch processing functionality is implemented in the existing script.
 
 ## Complexity Tracking
 

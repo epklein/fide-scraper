@@ -63,7 +63,7 @@
 - [x] T012 [US1] Implement CSV generation function `write_csv_output(filename: str, player_profiles: List[Dict]) -> None` in fide_scraper.py (use csv.DictWriter, proper escaping, columns: FIDE ID, Player Name, Standard, Rapid, Blitz)
 - [x] T013 [US1] Implement console output formatting function `format_console_output(player_profiles: List[Dict]) -> str` in fide_scraper.py (tabular format with aligned columns, handle missing ratings)
 - [x] T014 [US1] Implement batch processing function `process_batch(fide_ids: List[str]) -> Tuple[List[Dict], List[str]]` in fide_scraper.py (process each ID, extract name and ratings, collect results and errors, continue on individual failures)
-- [x] T015 [US1] Implement CLI argument parsing for `--file` / `-f` option in main function in fide_scraper.py (use argparse, maintain backward compatibility with single FIDE ID mode)
+- [x] T015 [US1] Implement CLI argument parsing in main function in fide_scraper.py (use argparse for batch processing mode)
 - [x] T016 [US1] Integrate batch processing: file reading → validation → batch processing → CSV writing → console output in main function in fide_scraper.py
 - [x] T017 [US1] Implement error summary reporting in main function in fide_scraper.py (print success count, error count, error messages to stderr)
 - [x] T018 [US1] Implement proper exit codes for batch mode in main function in fide_scraper.py (0 for success, 1 for file errors, 2 for file not found/permission denied per CLI contract)
@@ -83,7 +83,6 @@
 - [ ] T023 Code cleanup and refactoring: ensure batch processing code follows Python best practices and existing code patterns
 - [ ] T024 [P] Add integration test for edge cases in batch processing (empty file, file with only invalid IDs, very large file) in tests/test_integration.py
 - [ ] T025 Verify all acceptance scenarios from spec.md work correctly (test each acceptance scenario independently)
-- [ ] T026 [P] Verify backward compatibility: ensure single FIDE ID mode still works correctly after batch processing changes
 
 ---
 
@@ -114,9 +113,9 @@
 
 - **Foundational Phase**: T002 can run in parallel with T001 (different files)
 - **User Story 1 Tests**: T003, T004, T005, T006, T007, T008, T009 can all run in parallel (different test functions)
-- **User Story 1 Implementation**: 
+- **User Story 1 Implementation**:
   - T010, T011, T012, T013 can run in parallel (different utility functions)
-  - T019, T020, T021, T022, T024, T026 can run in parallel in Polish phase
+  - T019, T020, T021, T022, T024, T025 can run in parallel in Polish phase
 
 ---
 
@@ -186,7 +185,6 @@ With multiple developers:
 - Player name extraction uses selector `h1.player-title` from research.md
 - CSV generation uses Python's csv module (standard library) per research.md
 - Date format uses ISO 8601 (YYYY-MM-DD) per research.md
-- Maintain backward compatibility with single FIDE ID mode
 - Sequential processing (one FIDE ID at a time) per research.md
 - Error handling: continue processing on individual failures per FR-008, FR-012, FR-013
 

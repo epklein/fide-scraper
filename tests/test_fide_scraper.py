@@ -12,6 +12,8 @@ import smtplib
 # Add parent directory to path to import fide_scraper
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import fide_scraper
+import email_notifier
+import ratings_api
 
 
 class TestFideIdValidation:
@@ -241,31 +243,6 @@ class TestErrorHandling:
         assert standard is None or isinstance(standard, (int, str, type(None)))
         assert rapid is None or isinstance(rapid, (int, str, type(None)))
         assert blitz is None or isinstance(blitz, (int, str, type(None)))
-
-
-class TestFormatOutput:
-    """Tests for rating output formatting."""
-    
-    def test_format_output_all_ratings(self):
-        """Test formatting output with all three ratings."""
-        output = fide_scraper.format_ratings_output(2500, 2450, 2400)
-        assert "Standard: 2500" in output
-        assert "Rapid: 2450" in output
-        assert "Blitz: 2400" in output
-    
-    def test_format_output_with_unrated_blitz(self):
-        """Test formatting output with unrated blitz."""
-        output = fide_scraper.format_ratings_output(2500, 2450, None)
-        assert "Standard: 2500" in output
-        assert "Rapid: 2450" in output
-        assert "Blitz: Unrated" in output
-    
-    def test_format_output_all_unrated(self):
-        """Test formatting output when all ratings are unrated."""
-        output = fide_scraper.format_ratings_output(None, None, None)
-        assert "Standard: Unrated" in output
-        assert "Rapid: Unrated" in output
-        assert "Blitz: Unrated" in output
 
 
 class TestPlayerNameExtraction:
@@ -1071,7 +1048,7 @@ class TestComposeNotificationEmail:
     def test_compose_notification_email_single_change(self):
         """Test composing email with a single rating change."""
         changes = {"Standard": (2440, 2450)}
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Alice Smith",
             "12345678",
             changes,
@@ -1091,7 +1068,7 @@ class TestComposeNotificationEmail:
             "Rapid": (2300, 2310),
             "Blitz": (2100, 2115)
         }
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Bob Jones",
             "87654321",
             changes,
@@ -1107,7 +1084,7 @@ class TestComposeNotificationEmail:
     def test_compose_notification_email_unrated_to_rated(self):
         """Test composing email when player becomes rated."""
         changes = {"Standard": (None, 2450)}
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Charlie Brown",
             "11111111",
             changes,
@@ -1120,7 +1097,7 @@ class TestComposeNotificationEmail:
     def test_compose_notification_email_rated_to_unrated(self):
         """Test composing email when player rating is removed."""
         changes = {"Rapid": (2300, None)}
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Diana Prince",
             "22222222",
             changes,
@@ -1137,7 +1114,7 @@ class TestComposeNotificationEmail:
             "Rapid": (2400, None),
             "Blitz": (2300, 2350)
         }
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Eve Wilson",
             "33333333",
             changes,
@@ -1155,7 +1132,7 @@ class TestComposeNotificationEmail:
             "Standard": (2440, 2450),
             "Rapid": (2300, 2310)
         }
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Frank Miller",
             "44444444",
             changes,
@@ -1175,7 +1152,7 @@ class TestComposeNotificationEmail:
     def test_compose_notification_email_with_cc_parameter(self):
         """Test that cc_email parameter is accepted but not used in composition."""
         changes = {"Standard": (2440, 2450)}
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Grace Lee",
             "55555555",
             changes,
@@ -1191,7 +1168,7 @@ class TestComposeNotificationEmail:
     def test_compose_notification_email_without_cc_parameter(self):
         """Test that cc_email is optional."""
         changes = {"Standard": (2440, 2450)}
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Henry Ford",
             "66666666",
             changes,
@@ -1204,7 +1181,7 @@ class TestComposeNotificationEmail:
     def test_compose_notification_email_special_characters_in_name(self):
         """Test composing email with special characters in player name."""
         changes = {"Standard": (2440, 2450)}
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "José García-López",
             "77777777",
             changes,
@@ -1220,7 +1197,7 @@ class TestComposeNotificationEmail:
             "Standard": (2200, 2500),  # 300 point jump
             "Rapid": (2100, 1900)      # 200 point drop
         }
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Iris Newton",
             "88888888",
             changes,
@@ -1233,7 +1210,7 @@ class TestComposeNotificationEmail:
     def test_compose_notification_email_format_consistency(self):
         """Test that email format is consistent with expected structure."""
         changes = {"Standard": (2440, 2450)}
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Jack Turner",
             "99999999",
             changes,
@@ -1248,7 +1225,7 @@ class TestComposeNotificationEmail:
     def test_compose_notification_email_no_changes(self):
         """Test composing email with no rating changes (edge case)."""
         changes = {}
-        subject, body = fide_scraper.compose_notification_email(
+        subject, body = email_notifier._compose_notification_email(
             "Kate Mitchell",
             "10101010",
             changes,
@@ -1264,7 +1241,7 @@ class TestComposeNotificationEmail:
 class TestSendEmailNotification:
     """Tests for send_email_notification function."""
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     @patch.dict(os.environ, {
         'SMTP_SERVER': 'smtp.example.com',
         'SMTP_PORT': '587',
@@ -1276,7 +1253,7 @@ class TestSendEmailNotification:
         mock_server = MagicMock()
         mock_smtp_class.return_value = mock_server
 
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "alice@example.com",
             None,
             "Test Subject",
@@ -1290,7 +1267,7 @@ class TestSendEmailNotification:
         mock_server.sendmail.assert_called_once()
         mock_server.quit.assert_called_once()
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     @patch.dict(os.environ, {
         'SMTP_SERVER': 'localhost',
         'SMTP_PORT': '587'
@@ -1300,7 +1277,7 @@ class TestSendEmailNotification:
         mock_server = MagicMock()
         mock_smtp_class.return_value = mock_server
 
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "alice@example.com",
             "admin@example.com",
             "Test Subject",
@@ -1314,7 +1291,7 @@ class TestSendEmailNotification:
         assert "alice@example.com" in recipients
         assert "admin@example.com" in recipients
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     @patch.dict(os.environ, {
         'SMTP_SERVER': 'localhost',
         'SMTP_PORT': '587',
@@ -1326,7 +1303,7 @@ class TestSendEmailNotification:
         mock_server = MagicMock()
         mock_smtp_class.return_value = mock_server
 
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "bob@example.com",
             None,
             "Subject",
@@ -1339,7 +1316,7 @@ class TestSendEmailNotification:
         mock_server.login.assert_not_called()
         mock_server.sendmail.assert_called_once()
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     @patch.dict(os.environ, {
         'SMTP_SERVER': 'localhost',
         'SMTP_PORT': '587',
@@ -1352,7 +1329,7 @@ class TestSendEmailNotification:
         mock_smtp_class.return_value = mock_server
         mock_server.login.side_effect = smtplib.SMTPAuthenticationError(401, "Invalid credentials")
 
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "charlie@example.com",
             None,
             "Subject",
@@ -1361,14 +1338,14 @@ class TestSendEmailNotification:
 
         assert result is False
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     def test_send_email_notification_smtp_error(self, mock_smtp_class):
         """Test handling of general SMTP error."""
         mock_server = MagicMock()
         mock_smtp_class.return_value = mock_server
         mock_server.sendmail.side_effect = smtplib.SMTPException("SMTP error")
 
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "diana@example.com",
             None,
             "Subject",
@@ -1377,12 +1354,12 @@ class TestSendEmailNotification:
 
         assert result is False
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     def test_send_email_notification_connection_error(self, mock_smtp_class):
         """Test handling of connection error."""
         mock_smtp_class.side_effect = ConnectionError("Connection refused")
 
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "eve@example.com",
             None,
             "Subject",
@@ -1391,12 +1368,12 @@ class TestSendEmailNotification:
 
         assert result is False
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     def test_send_email_notification_timeout(self, mock_smtp_class):
         """Test handling of timeout error."""
         mock_smtp_class.side_effect = TimeoutError("Connection timeout")
 
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "frank@example.com",
             None,
             "Subject",
@@ -1407,7 +1384,7 @@ class TestSendEmailNotification:
 
     def test_send_email_notification_invalid_recipient(self):
         """Test handling of invalid recipient email."""
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "",
             None,
             "Subject",
@@ -1418,7 +1395,7 @@ class TestSendEmailNotification:
 
     def test_send_email_notification_none_recipient(self):
         """Test handling of None recipient email."""
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             None,
             None,
             "Subject",
@@ -1427,13 +1404,13 @@ class TestSendEmailNotification:
 
         assert result is False
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     @patch.dict(os.environ, {
         'SMTP_PORT': 'invalid_port'
     }, clear=False)
     def test_send_email_notification_invalid_port(self, mock_smtp_class):
         """Test handling of invalid SMTP port configuration."""
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "grace@example.com",
             None,
             "Subject",
@@ -1442,7 +1419,7 @@ class TestSendEmailNotification:
 
         assert result is False
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     @patch.dict(os.environ, {
         'SMTP_SERVER': 'localhost',
         'SMTP_PORT': '587'
@@ -1452,7 +1429,7 @@ class TestSendEmailNotification:
         mock_server = MagicMock()
         mock_smtp_class.return_value = mock_server
 
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "henry@example.com",
             "admin@example.com",
             "Test Subject",
@@ -1469,7 +1446,7 @@ class TestSendEmailNotification:
         assert "Cc: admin@example.com" in email_content
         assert "Test Body Content" in email_content
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     @patch.dict(os.environ, {
         'SMTP_SERVER': 'localhost',
         'SMTP_PORT': '587'
@@ -1479,7 +1456,7 @@ class TestSendEmailNotification:
         mock_server = MagicMock()
         mock_smtp_class.return_value = mock_server
 
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "iris@example.com",
             None,
             "Rating Update - José García",
@@ -1489,7 +1466,7 @@ class TestSendEmailNotification:
         assert result is True
         mock_server.sendmail.assert_called_once()
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     @patch.dict(os.environ, {
         'SMTP_SERVER': 'localhost',
         'SMTP_PORT': '587',
@@ -1501,7 +1478,7 @@ class TestSendEmailNotification:
         mock_server = MagicMock()
         mock_smtp_class.return_value = mock_server
 
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "jack@example.com",
             None,
             "Subject",
@@ -1512,7 +1489,7 @@ class TestSendEmailNotification:
         # login should not be called with empty credentials
         mock_server.login.assert_not_called()
 
-    @patch('fide_scraper.smtplib.SMTP')
+    @patch('email_notifier.smtplib.SMTP')
     @patch.dict(os.environ, {
         'SMTP_SERVER': 'localhost',
         'SMTP_PORT': '587'
@@ -1522,7 +1499,7 @@ class TestSendEmailNotification:
         mock_server = MagicMock()
         mock_smtp_class.return_value = mock_server
 
-        result = fide_scraper.send_email_notification(
+        result = email_notifier._send_email_notification(
             "kate@example.com",
             "   ",
             "Subject",
@@ -1545,7 +1522,7 @@ class TestLoadApiConfig:
     @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': 'test-token-123'})
     def test_load_api_config_valid(self):
         """Test loading valid API configuration from environment."""
-        config = fide_scraper.load_api_config()
+        config = ratings_api._load_api_config()
         assert config is not None
         assert config['endpoint'] == 'https://api.example.com/ratings/'
         assert config['token'] == 'test-token-123'
@@ -1558,25 +1535,25 @@ class TestLoadApiConfig:
             if var in os.environ:
                 del os.environ[var]
 
-        config = fide_scraper.load_api_config()
+        config = ratings_api._load_api_config()
         assert config is None
 
     @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': ''})
     def test_load_api_config_missing_token(self):
         """Test loading API configuration when token is missing."""
-        config = fide_scraper.load_api_config()
+        config = ratings_api._load_api_config()
         assert config is None
 
     @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': '', 'API_TOKEN': 'test-token-123'})
     def test_load_api_config_missing_endpoint(self):
         """Test loading API configuration when endpoint is missing."""
-        config = fide_scraper.load_api_config()
+        config = ratings_api._load_api_config()
         assert config is None
 
     @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': '  https://api.example.com/ratings/  ', 'API_TOKEN': '  test-token-123  '})
     def test_load_api_config_strips_whitespace(self):
         """Test that load_api_config strips whitespace from environment variables."""
-        config = fide_scraper.load_api_config()
+        config = ratings_api._load_api_config()
         assert config is not None
         assert config['endpoint'] == 'https://api.example.com/ratings/'
         assert config['token'] == 'test-token-123'
@@ -1588,7 +1565,7 @@ class TestShouldPostToApi:
     @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': 'test-token-123'})
     def test_should_post_to_api_enabled(self):
         """Test should_post_to_api returns True when both variables are set."""
-        assert fide_scraper.should_post_to_api() is True
+        assert ratings_api._should_post_to_api() is True
 
     @patch.dict(os.environ, {}, clear=False)
     def test_should_post_to_api_disabled_missing_both(self):
@@ -1597,18 +1574,18 @@ class TestShouldPostToApi:
             if var in os.environ:
                 del os.environ[var]
 
-        assert fide_scraper.should_post_to_api() is False
+        assert ratings_api._should_post_to_api() is False
 
     @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': ''})
     def test_should_post_to_api_disabled_missing_token(self):
         """Test should_post_to_api returns False when token is missing."""
-        assert fide_scraper.should_post_to_api() is False
+        assert ratings_api._should_post_to_api() is False
 
 
 class TestPostRatingToApi:
     """Tests for post_rating_to_api() function."""
 
-    @patch('fide_scraper.requests.post')
+    @patch('ratings_api.requests.post')
     def test_post_rating_to_api_success(self, mock_post):
         """Test successful API POST request."""
         # Mock successful 200 response
@@ -1625,7 +1602,7 @@ class TestPostRatingToApi:
             'Blitz': 2300
         }
 
-        result = fide_scraper.post_rating_to_api(
+        result = ratings_api._post_rating_to_api(
             profile,
             'https://api.example.com/ratings/',
             'test-token-123'
@@ -1638,7 +1615,7 @@ class TestPostRatingToApi:
         assert call_kwargs['json']['fide_id'] == '12345678'
         assert call_kwargs['json']['player_name'] == 'John Doe'
 
-    @patch('fide_scraper.requests.post')
+    @patch('ratings_api.requests.post')
     def test_post_rating_to_api_timeout(self, mock_post):
         """Test API POST request with timeout error."""
         mock_post.side_effect = requests.Timeout("Connection timeout")
@@ -1652,7 +1629,7 @@ class TestPostRatingToApi:
             'Blitz': 2300
         }
 
-        result = fide_scraper.post_rating_to_api(
+        result = ratings_api._post_rating_to_api(
             profile,
             'https://api.example.com/ratings/',
             'test-token-123'
@@ -1662,7 +1639,7 @@ class TestPostRatingToApi:
         # Should have been called twice (1 initial + 1 retry)
         assert mock_post.call_count == 2
 
-    @patch('fide_scraper.requests.post')
+    @patch('ratings_api.requests.post')
     def test_post_rating_to_api_connection_error(self, mock_post):
         """Test API POST request with connection error."""
         mock_post.side_effect = requests.ConnectionError("Connection refused")
@@ -1676,7 +1653,7 @@ class TestPostRatingToApi:
             'Blitz': 2300
         }
 
-        result = fide_scraper.post_rating_to_api(
+        result = ratings_api._post_rating_to_api(
             profile,
             'https://api.example.com/ratings/',
             'test-token-123'
@@ -1686,7 +1663,7 @@ class TestPostRatingToApi:
         # Should have been called twice (1 initial + 1 retry)
         assert mock_post.call_count == 2
 
-    @patch('fide_scraper.requests.post')
+    @patch('ratings_api.requests.post')
     def test_post_rating_to_api_http_400_error(self, mock_post):
         """Test API POST request with HTTP 400 error (no retry)."""
         mock_response = Mock()
@@ -1703,7 +1680,7 @@ class TestPostRatingToApi:
             'Blitz': 2300
         }
 
-        result = fide_scraper.post_rating_to_api(
+        result = ratings_api._post_rating_to_api(
             profile,
             'https://api.example.com/ratings/',
             'test-token-123'
@@ -1713,7 +1690,7 @@ class TestPostRatingToApi:
         # Should only be called once (no retry for 4xx)
         assert mock_post.call_count == 1
 
-    @patch('fide_scraper.requests.post')
+    @patch('ratings_api.requests.post')
     def test_post_rating_to_api_http_500_error(self, mock_post):
         """Test API POST request with HTTP 500 error (with retry)."""
         mock_response = Mock()
@@ -1730,7 +1707,7 @@ class TestPostRatingToApi:
             'Blitz': 2300
         }
 
-        result = fide_scraper.post_rating_to_api(
+        result = ratings_api._post_rating_to_api(
             profile,
             'https://api.example.com/ratings/',
             'test-token-123'
@@ -1740,7 +1717,7 @@ class TestPostRatingToApi:
         # Should have been called twice (1 initial + 1 retry for 5xx)
         assert mock_post.call_count == 2
 
-    @patch('fide_scraper.requests.post')
+    @patch('ratings_api.requests.post')
     def test_post_rating_to_api_http_401_error(self, mock_post):
         """Test API POST request with HTTP 401 error (authentication error)."""
         mock_response = Mock()
@@ -1757,7 +1734,7 @@ class TestPostRatingToApi:
             'Blitz': 2300
         }
 
-        result = fide_scraper.post_rating_to_api(
+        result = ratings_api._post_rating_to_api(
             profile,
             'https://api.example.com/ratings/',
             'test-token-123'
@@ -1767,7 +1744,7 @@ class TestPostRatingToApi:
         # Should only be called once (no retry for 4xx)
         assert mock_post.call_count == 1
 
-    @patch('fide_scraper.requests.post')
+    @patch('ratings_api.requests.post')
     def test_post_rating_to_api_null_ratings(self, mock_post):
         """Test API POST with null ratings (unrated players)."""
         mock_response = Mock()
@@ -1783,7 +1760,7 @@ class TestPostRatingToApi:
             'Blitz': None
         }
 
-        result = fide_scraper.post_rating_to_api(
+        result = ratings_api._post_rating_to_api(
             profile,
             'https://api.example.com/ratings/',
             'test-token-123'
@@ -1795,7 +1772,7 @@ class TestPostRatingToApi:
         assert call_kwargs['json']['rapid_rating'] == 1900
         assert call_kwargs['json']['blitz_rating'] is None
 
-    @patch('fide_scraper.requests.post')
+    @patch('ratings_api.requests.post')
     def test_post_rating_to_api_timeout_value(self, mock_post):
         """Test that timeout is passed correctly to requests.post."""
         mock_response = Mock()
@@ -1811,7 +1788,7 @@ class TestPostRatingToApi:
             'Blitz': 2300
         }
 
-        result = fide_scraper.post_rating_to_api(
+        result = ratings_api._post_rating_to_api(
             profile,
             'https://api.example.com/ratings/',
             'test-token-123',
