@@ -78,16 +78,16 @@ def _post_rating_to_api(
         - requests.HTTPError: logged with status code, returns False
         - Unexpected response format: logged as error, returns False
     """
-    fide_id = profile.get('FIDE ID', 'unknown')
+    fide_id = profile.get('fide_id', 'unknown')
 
     # Transform profile dict to API request format
     rating_update = {
-        'date': profile.get('Date'),
-        'fide_id': profile.get('FIDE ID'),
-        'player_name': profile.get('Player Name'),
-        'standard_rating': profile.get('Standard'),
-        'rapid_rating': profile.get('Rapid'),
-        'blitz_rating': profile.get('Blitz')
+        'date': profile.get('date'),
+        'fide_id': profile.get('fide_id'),
+        'player_name': profile.get('player_name'),
+        'standard_rating': profile.get('standard_rating'),
+        'rapid_rating': profile.get('rapid_rating'),
+        'blitz_rating': profile.get('blitz_rating')
     }
 
     headers = {
@@ -154,19 +154,19 @@ def send_batch_api_updates(
     results: List[Dict]
 ) -> Tuple[int, int]:
     """
-    Send rating updates to external API for profiles with rating changes.
+    Send rating updates to external API for profiles with new rating history months.
 
     Processes batch results and sends API updates for players who have detected
-    rating changes. Only profiles with changes are posted to the API.
+    new months in their rating history. Only profiles with new_months are posted to the API.
 
     Args:
-        results: List of player results from process_batch() with 'changes' key
+        results: List of player results from process_batch() with 'new_months' key
 
     Returns:
         Tuple of (posted_count, failed_count) for logging and reporting
 
     Side Effects:
-        Posts HTTP requests to external API for profiles with changes.
+        Posts HTTP requests to external API for profiles with new months.
         Logs all attempts. Continues on errors.
     """
     # Load API configuration from environment variables
@@ -180,31 +180,42 @@ def send_batch_api_updates(
     failed_count = 0
 
     for profile in results:
-        # Skip if no changes detected
-        changes = profile.get('changes', {})
-        if not changes:
+        # Skip if no new months detected
+        new_months = profile.get('New Months', [])
+        if not new_months:
             continue
 
         fide_id = profile.get('FIDE ID', 'unknown')
         player_name = profile.get('Player Name', '')
 
         try:
-            # Post rating to API
-            success = _post_rating_to_api(
-                profile,
-                api_config['endpoint'],
-                api_config['token']
-            )
+            # Post each new month to API
+            for month_record in new_months:
+                # Build API payload for this month
+                api_payload = {
+                    'date': month_record.get('date').isoformat() if hasattr(month_record.get('date'), 'isoformat') else str(month_record.get('date')),
+                    'fide_id': fide_id,
+                    'player_name': player_name,
+                    'standard_rating': month_record.get('standard'),
+                    'rapid_rating': month_record.get('rapid'),
+                    'blitz_rating': month_record.get('blitz')
+                }
 
-            if success:
-                posted_count += 1
-                print(f"✓ API update posted for {player_name} ({fide_id})", file=sys.stderr)
-            else:
-                failed_count += 1
-                print(f"✗ Failed to post API update for {player_name} ({fide_id})", file=sys.stderr)
+                # Post to API
+                success = _post_rating_to_api(
+                    api_payload,
+                    api_config['endpoint'],
+                    api_config['token']
+                )
 
+                if success:
+                    posted_count += 1
+                else:
+                    failed_count += 1
+
+            print(f"✓ API updates posted for {player_name} ({fide_id}) - {len(new_months)} months", file=sys.stderr)
         except Exception as e:
-            failed_count += 1
+            failed_count += len(new_months)
             print(f"✗ Error posting API update for {fide_id}: {e}", file=sys.stderr)
 
     return posted_count, failed_count

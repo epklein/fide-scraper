@@ -16,40 +16,42 @@ from email.mime.multipart import MIMEMultipart
 def _compose_notification_email(
     player_name: str,
     fide_id: str,
-    changes: Dict[str, Tuple[Optional[int], Optional[int]]],
-    recipient_email: str,
-    cc_email: Optional[str] = None,
+    rating_history: List[Dict],
     fide_profile_url: Optional[str] = None
 ) -> Tuple[str, str]:
     """
     Compose a notification email about rating changes.
 
     Generates an email subject and body informing a player about their FIDE rating updates.
-    The email includes their name, FIDE ID, and details of changed ratings.
+    The email includes their name, FIDE ID, and details of changed ratings between the two
+    most recent entries in their rating history.
 
     Args:
         player_name: Player's full name (e.g., "Alice Smith")
         fide_id: Player's FIDE ID (e.g., "12345678")
-        changes: Dictionary of changed ratings {rating_type: (old_value, new_value), ...}
-                Example: {"Standard": (2440, 2450), "Rapid": (2300, 2310)}
-        recipient_email: Email address of the recipient (player)
-        cc_email: Optional email address to CC (e.g., admin email). Not used in compose, for reference.
+        rating_history: List of rating history records (most recent first).
+                       Each record contains: {date: date_obj, standard: int|None, rapid: int|None, blitz: int|None}
+                       Example: [
+                           {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2310, "blitz": 1900},
+                           {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 1890}
+                       ]
         fide_profile_url: Optional full URL to FIDE profile. If not provided, will be constructed from fide_id.
 
     Returns:
         Tuple of (subject, body) containing the email subject line and body content
 
     Examples:
-        changes = {"Standard": (2440, 2450), "Rapid": (2300, 2310)}
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2310, "blitz": 1900},
+            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 1890}
+        ]
         subject, body = _compose_notification_email(
             "Alice Smith",
             "12345678",
-            changes,
-            "alice@example.com",
-            "admin@example.com"
+            rating_history
         )
         # subject: "Your FIDE Rating Update - Alice Smith"
-        # body: Contains formatted rating changes with before/after values
+        # body: Contains formatted rating changes between the two most recent months
     """
     # Construct FIDE profile URL if not provided
     if fide_profile_url is None:
@@ -57,7 +59,6 @@ def _compose_notification_email(
 
     # Compose subject
     subject = f"Your FIDE Rating Update - {player_name}"
-
     # Compose body
     lines = [
         "Dear " + player_name + ",",
@@ -66,17 +67,44 @@ def _compose_notification_email(
         ""
     ]
 
-    # Add rating changes (sorted by rating type for consistency)
-    for rating_type in sorted(changes.keys()):
-        old_value, new_value = changes[rating_type]
+    # Extract changes from the two most recent history entries
+    if len(rating_history) >= 2:
+        # Most recent month (index 0) and previous month (index 1)
+        current = rating_history[0]
+        previous = rating_history[1]
 
-        # Format old rating (handle None as "unrated")
-        old_str = str(old_value) if old_value is not None else "unrated"
-        # Format new rating (handle None as "unrated")
-        new_str = str(new_value) if new_value is not None else "unrated"
+        # Build changes dictionary from the two most recent entries
+        changes = {
+            "Standard": (previous.get("standard"), current.get("standard")),
+            "Rapid": (previous.get("rapid"), current.get("rapid")),
+            "Blitz": (previous.get("blitz"), current.get("blitz"))
+        }
 
-        # Format the change line
-        lines.append(f"{rating_type} Rating: {old_str} → {new_str}")
+        # Add rating changes (sorted by rating type for consistency)
+        for rating_type in sorted(changes.keys()):
+            old_value, new_value = changes[rating_type]
+
+            # Format old rating (handle None as "unrated")
+            old_str = str(old_value) if old_value is not None else "unrated"
+            # Format new rating (handle None as "unrated")
+            new_str = str(new_value) if new_value is not None else "unrated"
+
+            # Format the change line
+            lines.append(f"{rating_type} Rating: {old_str} → {new_str}")
+    elif len(rating_history) == 1:
+        # Only one month available, show the ratings
+        current = rating_history[0]
+        standard = current.get("standard")
+        rapid = current.get("rapid")
+        blitz = current.get("blitz")
+
+        standard_str = str(standard) if standard is not None else "unrated"
+        rapid_str = str(rapid) if rapid is not None else "unrated"
+        blitz_str = str(blitz) if blitz is not None else "unrated"
+
+        lines.append(f"Standard Rating: {standard_str}")
+        lines.append(f"Rapid Rating: {rapid_str}")
+        lines.append(f"Blitz Rating: {blitz_str}")
 
     # Add footer with FIDE profile URL
     lines.extend([
@@ -210,22 +238,22 @@ def send_batch_notifications(
     player_data: Dict[str, Dict[str, str]]
 ) -> Tuple[int, int]:
     """
-    Send email notifications to players with rating changes.
+    Send email notifications to players with new rating history months.
 
     Processes batch results and sends notification emails to players who:
-    1. Have detected rating changes
+    1. Have detected new months in their rating history
     2. Have a valid email address configured
     3. Have not opted out (email field not empty)
 
     Args:
-        results: List of player results from process_batch() with 'changes' key
+        results: List of player results from process_batch() with 'new_months' key
         player_data: Dictionary of player data with emails {fide_id: {"email": "..."}, ...}
 
     Returns:
         Tuple of (sent_count, failed_count) for logging and reporting
 
     Side Effects:
-        Sends SMTP emails for players with changes. Logs all attempts. Continues on errors.
+        Sends SMTP emails for players with new months. Logs all attempts. Continues on errors.
     """
     # Read admin CC email from environment variable
     admin_cc_email = os.getenv('ADMIN_CC_EMAIL', '').strip() or None
@@ -236,10 +264,11 @@ def send_batch_notifications(
     for result in results:
         fide_id = result.get('FIDE ID')
         player_name = result.get('Player Name', '')
-        changes = result.get('changes', {})
+        rating_history = result.get('Rating History', [])
+        new_months = result.get('New Months', [])
 
-        # Skip if no changes detected
-        if not changes:
+        # Skip if no new months detected
+        if not new_months:
             continue
 
         # Get player email
@@ -257,9 +286,7 @@ def send_batch_notifications(
             subject, body = _compose_notification_email(
                 player_name,
                 fide_id,
-                changes,
-                player_email,
-                admin_cc_email
+                rating_history
             )
 
             # Send email

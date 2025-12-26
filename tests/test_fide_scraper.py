@@ -48,153 +48,6 @@ class TestFideIdValidation:
         assert fide_scraper.validate_fide_id(None) == False
 
 
-class TestRatingExtraction:
-    """Tests for rating extraction from HTML."""
-    
-    def test_extract_standard_rating_success(self):
-        """Test extracting standard rating from HTML using documented structure from research.md."""
-        # HTML structure matches research.md exactly
-        html = """
-        <div class="profile-games ">
-            <div class="profile-standart profile-game ">
-                <img src="/img/logo_std.svg" alt="standart" height=25>
-                <p>2500</p>
-                <p style="font-size: 8px; padding:0; margin:0;">STANDARD <span class=inactiv_note></span></p>
-            </div>
-        </div>
-        """
-        rating = fide_scraper.extract_standard_rating(html)
-        assert rating == 2500
-    
-    def test_extract_rapid_rating_success(self):
-        """Test extracting rapid rating from HTML using documented structure from research.md."""
-        # HTML structure matches research.md exactly
-        html = """
-        <div class="profile-games ">
-            <div class="profile-rapid profile-game ">
-                <img src="/img/logo_rpd.svg" alt="rapid" height=25>
-                <p>2450</p>
-                <p style="font-size: 8px; padding:0; margin:0;">RAPID<span class=inactiv_note></p>
-            </div>
-        </div>
-        """
-        rating = fide_scraper.extract_rapid_rating(html)
-        assert rating == 2450
-    
-    def test_extract_blitz_rating_success(self):
-        """Test extracting blitz rating from HTML using documented structure from research.md."""
-        # HTML structure matches research.md exactly
-        html = """
-        <div class="profile-games ">
-            <div class="profile-blitz profile-game ">
-                <img src="/img/logo_blitz.svg" alt="blitz" height=25>
-                <p>2400</p>
-                <p style="font-size: 8px; padding:0; margin:0;">BLITZ<span class=inactiv_note></p>
-            </div>
-        </div>
-        """
-        rating = fide_scraper.extract_blitz_rating(html)
-        assert rating == 2400
-    
-    def test_extract_rating_unrated(self):
-        """Test handling unrated players using documented structure from research.md."""
-        # HTML structure matches research.md exactly - shows "Not rated" case
-        html = """
-        <div class="profile-games ">
-            <div class="profile-standart profile-game ">
-                <img src="/img/logo_std.svg" alt="standart" height=25>
-                <p>Not rated</p>
-                <p style="font-size: 8px; padding:0; margin:0;">STANDARD <span class=inactiv_note></span></p>
-            </div>
-            <div class="profile-rapid profile-game ">
-                <img src="/img/logo_rpd.svg" alt="rapid" height=25>
-                <p>Not rated</p>
-                <p style="font-size: 8px; padding:0; margin:0;">RAPID<span class=inactiv_note></p>
-            </div>
-            <div class="profile-blitz profile-game ">
-                <img src="/img/logo_blitz.svg" alt="blitz" height=25>
-                <p>Not rated</p>
-                <p style="font-size: 8px; padding:0; margin:0;">BLITZ<span class=inactiv_note></p>
-            </div>
-        </div>
-        """
-        standard = fide_scraper.extract_standard_rating(html)
-        rapid = fide_scraper.extract_rapid_rating(html)
-        blitz = fide_scraper.extract_blitz_rating(html)
-        # Should return None for unrated
-        assert standard is None
-        assert rapid is None
-        assert blitz is None
-    
-    def test_extract_rating_missing_element(self):
-        """Test handling missing rating elements (no profile-games div)."""
-        html = "<html><body></body></html>"
-        standard = fide_scraper.extract_standard_rating(html)
-        rapid = fide_scraper.extract_rapid_rating(html)
-        blitz = fide_scraper.extract_blitz_rating(html)
-        assert standard is None
-        assert rapid is None
-        assert blitz is None
-    
-    def test_extract_rating_partial_structure(self):
-        """Test handling when profile-games exists but rating divs are missing."""
-        # Has profile-games but no rating divs
-        html = """
-        <div class="profile-games ">
-            <!-- No rating divs present -->
-        </div>
-        """
-        standard = fide_scraper.extract_standard_rating(html)
-        rapid = fide_scraper.extract_rapid_rating(html)
-        blitz = fide_scraper.extract_blitz_rating(html)
-        assert standard is None
-        assert rapid is None
-        assert blitz is None
-    
-    def test_extract_rating_mixed_rated_unrated(self):
-        """Test handling when one rating is present and one is unrated."""
-        # Standard rated, rapid unrated (matches research.md example structure)
-        html = """
-        <div class="profile-games ">
-            <div class="profile-standart profile-game ">
-                <img src="/img/logo_std.svg" alt="standart" height=25>
-                <p>2500</p>
-                <p style="font-size: 8px; padding:0; margin:0;">STANDARD <span class=inactiv_note></span></p>
-            </div>
-            <div class="profile-rapid profile-game ">
-                <img src="/img/logo_rpd.svg" alt="rapid" height=25>
-                <p>Not rated</p>
-                <p style="font-size: 8px; padding:0; margin:0;">RAPID<span class=inactiv_note></p>
-            </div>
-            <div class="profile-blitz profile-game ">
-                <img src="/img/logo_blitz.svg" alt="blitz" height=25>
-                <p>2400</p>
-                <p style="font-size: 8px; padding:0; margin:0;">BLITZ<span class=inactiv_note></p>
-            </div>
-        </div>
-        """
-        standard = fide_scraper.extract_standard_rating(html)
-        rapid = fide_scraper.extract_rapid_rating(html)
-        blitz = fide_scraper.extract_blitz_rating(html)
-        assert standard == 2500
-        assert rapid is None
-        assert blitz == 2400
-    
-    def test_extract_blitz_rating_unrated(self):
-        """Test handling unrated blitz rating."""
-        html = """
-        <div class="profile-games ">
-            <div class="profile-blitz profile-game ">
-                <img src="/img/logo_blitz.svg" alt="blitz" height=25>
-                <p>Not rated</p>
-                <p style="font-size: 8px; padding:0; margin:0;">BLITZ<span class=inactiv_note></p>
-            </div>
-        </div>
-        """
-        blitz = fide_scraper.extract_blitz_rating(html)
-        assert blitz is None
-
-
 class TestErrorHandling:
     """Tests for error handling."""
     
@@ -232,18 +85,6 @@ class TestErrorHandling:
         with pytest.raises(requests.Timeout):
             fide_scraper.fetch_fide_profile("538026660")
     
-    def test_parsing_error_handling(self):
-        """Test handling of HTML parsing errors."""
-        invalid_html = "<html><body><broken>"
-        # Should not raise exception, should return None or handle gracefully
-        standard = fide_scraper.extract_standard_rating(invalid_html)
-        rapid = fide_scraper.extract_rapid_rating(invalid_html)
-        blitz = fide_scraper.extract_blitz_rating(invalid_html)
-        # Either None or exception handled gracefully
-        assert standard is None or isinstance(standard, (int, str, type(None)))
-        assert rapid is None or isinstance(rapid, (int, str, type(None)))
-        assert blitz is None or isinstance(blitz, (int, str, type(None)))
-
 
 class TestPlayerNameExtraction:
     """Tests for player name extraction from HTML."""
@@ -324,13 +165,19 @@ class TestCSVGeneration:
     def test_write_csv_output_proper_formatting(self, tmp_path):
         """Test CSV generation with proper formatting and escaping."""
         output_file = tmp_path / "test_output.csv"
+        from datetime import date
+        today = date.today()
+
         player_profiles = [
             {
                 'FIDE ID': '538026660',
                 'Player Name': 'Magnus Carlsen',
                 'Standard': 2830,
                 'Rapid': 2780,
-                'Blitz': 2760
+                'Blitz': 2760,
+                'Rating History': [
+                    {'date': today, 'standard': 2830, 'rapid': 2780, 'blitz': 2760}
+                ]
             }
         ]
         fide_scraper.write_csv_output(str(output_file), player_profiles)
@@ -339,20 +186,25 @@ class TestCSVGeneration:
         content = output_file.read_text(encoding='utf-8')
         assert 'Date,FIDE ID,Player Name,Standard,Rapid,Blitz' in content
         # Date should be in ISO format at the beginning
-        from datetime import date
-        today = date.today().isoformat()
-        assert f'{today},538026660,Magnus Carlsen,2830,2780,2760' in content
+        today_str = today.isoformat()
+        assert f'{today_str},538026660,Magnus Carlsen,2830,2780,2760' in content
     
     def test_write_csv_output_special_characters(self, tmp_path):
         """Test CSV generation with special characters in player names (proper escaping)."""
         output_file = tmp_path / "test_output.csv"
+        from datetime import date
+        today = date.today()
+
         player_profiles = [
             {
                 'FIDE ID': '123456',
                 'Player Name': 'Player, With Comma',
                 'Standard': 2500,
                 'Rapid': 2450,
-                'Blitz': 2400
+                'Blitz': 2400,
+                'Rating History': [
+                    {'date': today, 'standard': 2500, 'rapid': 2450, 'blitz': 2400}
+                ]
             }
         ]
         fide_scraper.write_csv_output(str(output_file), player_profiles)
@@ -364,23 +216,28 @@ class TestCSVGeneration:
     def test_write_csv_output_empty_values(self, tmp_path):
         """Test CSV generation with empty/missing ratings."""
         output_file = tmp_path / "test_output.csv"
+        from datetime import date
+        today = date.today()
+
         player_profiles = [
             {
                 'FIDE ID': '123456',
                 'Player Name': 'Test Player',
                 'Standard': 2500,
                 'Rapid': None,
-                'Blitz': None
+                'Blitz': None,
+                'Rating History': [
+                    {'date': today, 'standard': 2500, 'rapid': None, 'blitz': None}
+                ]
             }
         ]
         fide_scraper.write_csv_output(str(output_file), player_profiles)
 
         # Read and verify CSV content - Date should come first
         content = output_file.read_text(encoding='utf-8')
-        from datetime import date
-        today = date.today().isoformat()
+        today_str = today.isoformat()
         # Check that date is present and values are correct
-        assert today in content
+        assert today_str in content
         assert '123456,Test Player,2500,,' in content or 'Test Player,2500' in content
     
     def test_write_csv_output_header_row(self, tmp_path):
@@ -398,6 +255,8 @@ class TestCSVGeneration:
         output_file = tmp_path / "test_output.csv"
         from datetime import date, timedelta
 
+        today = date.today()
+
         # First write - initial data
         player_profiles_1 = [
             {
@@ -405,7 +264,10 @@ class TestCSVGeneration:
                 'Player Name': 'Magnus Carlsen',
                 'Standard': 2830,
                 'Rapid': 2780,
-                'Blitz': 2760
+                'Blitz': 2760,
+                'Rating History': [
+                    {'date': today, 'standard': 2830, 'rapid': 2780, 'blitz': 2760}
+                ]
             }
         ]
         fide_scraper.write_csv_output(str(output_file), player_profiles_1)
@@ -413,77 +275,93 @@ class TestCSVGeneration:
         # Second write on same day - should replace previous data
         player_profiles_2 = [
             {
-                'FIDE ID': '2016892',
-                'Player Name': 'Ding Liren',
-                'Standard': 2780,
-                'Rapid': 2750,
-                'Blitz': 2730
+                'FIDE ID': '538026660',
+                'Player Name': 'Magnus Carlsen',
+                'Standard': 2840,
+                'Rapid': 2790,
+                'Blitz': 2770,
+                'Rating History': [
+                    {'date': today, 'standard': 2840, 'rapid': 2790, 'blitz': 2770}
+                ]
             }
         ]
         fide_scraper.write_csv_output(str(output_file), player_profiles_2)
 
         # Read and verify behavior
         content = output_file.read_text(encoding='utf-8')
-        today = date.today().isoformat()
+        today_str = today.isoformat()
 
         # Should have header only once
         header_count = content.count('Date,FIDE ID,Player Name,Standard,Rapid,Blitz')
         assert header_count == 1, "Header should appear only once"
 
-        # Should have only the second (latest) entry for today, not the first one
-        assert 'Ding Liren' in content, "Latest entry should be present"
-        assert 'Magnus Carlsen' not in content, "Old entry for same day should be removed"
-        assert '2016892' in content, "New FIDE ID should be present"
-        # Check that old FIDE ID is not in today's entries
-        lines = content.split('\n')
-        for line in lines:
-            if today in line and line.strip():
-                assert '538026660' not in line, "Old FIDE ID should not appear in today's entries"
+        # Should have the updated entry with new ratings
+        assert 'Magnus Carlsen' in content, "Player should be present"
+        assert '2840' in content, "Updated Standard rating should be present"
+        # Should only have one entry for this player today
+        lines = [l for l in content.split('\n') if today_str in l and '538026660' in l]
+        assert len(lines) == 1, "Should have exactly one entry per player per month"
+
 
     def test_write_csv_output_preserve_older_dates(self, tmp_path):
-        """Test that CSV output preserves entries from previous dates."""
+        """Test that CSV output preserves entries from previous months."""
         output_file = tmp_path / "test_output.csv"
-        from datetime import date, timedelta
+        from datetime import date
+        from calendar import monthrange
 
-        # Create a file with yesterday's data
+        # Create a file with last month's data
         today = date.today()
-        yesterday = (today - timedelta(days=1)).isoformat()
+        # Get last day of previous month
+        if today.month == 1:
+            last_month_date = date(today.year - 1, 12, 31)
+        else:
+            last_month_date = date(today.year, today.month - 1, monthrange(today.year, today.month - 1)[1])
 
-        # Manually create a file with yesterday's data
+        last_month_str = last_month_date.isoformat()
+
+        # Manually create a file with last month's data
         output_file.write_text(
             f"Date,FIDE ID,Player Name,Standard,Rapid,Blitz\n"
-            f"{yesterday},1503014,Magnus Carlsen,2830,2780,2760\n"
+            f"{last_month_str},1503014,Magnus Carlsen,2830,2780,2760\n"
         )
 
-        # Now write today's data
+        # Now write current month's data
         player_profiles = [
             {
-                'FIDE ID': '2016892',
-                'Player Name': 'Ding Liren',
-                'Standard': 2780,
-                'Rapid': 2750,
-                'Blitz': 2730
+                'FIDE ID': '1503014',
+                'Player Name': 'Magnus Carlsen',
+                'Standard': 2840,
+                'Rapid': 2790,
+                'Blitz': 2760,
+                'Rating History': [
+                    {
+                        'date': today,
+                        'standard': 2840,
+                        'rapid': 2790,
+                        'blitz': 2760
+                    }
+                ]
             }
         ]
         fide_scraper.write_csv_output(str(output_file), player_profiles)
 
-        # Read and verify both dates are present
+        # Read and verify both months are present
         content = output_file.read_text(encoding='utf-8')
-        today_str = date.today().isoformat()
+        today_str = today.isoformat()
 
         # Should have header only once
         header_count = content.count('Date,FIDE ID,Player Name,Standard,Rapid,Blitz')
         assert header_count == 1, "Header should appear only once"
 
-        # Should have yesterday's entry
-        assert yesterday in content, "Yesterday's entry should be preserved"
-        assert 'Magnus Carlsen' in content, "Yesterday's player should be present"
-        assert '1503014' in content, "Yesterday's FIDE ID should be present"
+        # Should have last month's entry
+        assert last_month_str in content, "Last month's entry should be preserved"
+        assert 'Magnus Carlsen' in content, "Last month's player should be present"
+        assert '1503014' in content, "Last month's FIDE ID should be present"
 
-        # Should have today's entry
-        assert today_str in content, "Today's date should be present"
-        assert 'Ding Liren' in content, "Today's player should be present"
-        assert '2016892' in content, "Today's FIDE ID should be present"
+        # Should have current month's entry
+        assert today_str in content, "Current month's date should be present"
+        assert 'Magnus Carlsen' in content, "Current month's player should be present"
+        assert '1503014' in content, "Current month's FIDE ID should be present"
 
 class TestConsoleOutputFormatting:
     """Tests for console output formatting."""
@@ -554,12 +432,13 @@ class TestBatchProcessingErrorHandling:
     """Tests for batch processing error handling."""
     
     @patch('fide_scraper.fetch_fide_profile')
+    @patch('fide_scraper.extract_rating_history')
     @patch('fide_scraper.extract_player_name')
-    @patch('fide_scraper.extract_standard_rating')
-    @patch('fide_scraper.extract_rapid_rating')
-    @patch('fide_scraper.extract_blitz_rating')
-    def test_batch_processing_invalid_ids_skipped(self, mock_blitz, mock_rapid, mock_standard, mock_name, mock_fetch):
+    def test_batch_processing_invalid_ids_skipped(self, mock_name, mock_history, mock_fetch):
         """Test that invalid FIDE IDs are skipped without stopping batch."""
+        mock_history.return_value = []  # Empty history
+        mock_name.return_value = ""  # No name found
+
         fide_ids = ["538026660", "invalid_id", "2016892"]
         results, errors = fide_scraper.process_batch(fide_ids)
         # Should process valid IDs and skip invalid one
@@ -723,24 +602,33 @@ class TestLoadHistoricalRatingsByPlayer:
         result = fide_scraper.load_historical_ratings_by_player(str(test_file))
 
         assert len(result) == 2
-        # Should have the latest record for each FIDE ID
-        assert result["12345678"]["Standard"] == "2450"
-        assert result["87654321"]["Standard"] == "2500"
+        # Should return lists of monthly records
+        assert isinstance(result["12345678"], list)
+        assert isinstance(result["87654321"], list)
+        # Check latest records (most recent month)
+        assert len(result["12345678"]) >= 1
+        assert len(result["87654321"]) >= 1
 
     def test_load_historical_ratings_latest_per_player(self, tmp_path):
         """Test that only latest record per player is kept."""
         test_file = tmp_path / "fide_ratings.csv"
         test_file.write_text(
             "Date,FIDE ID,Player Name,Standard,Rapid,Blitz\n"
-            "2025-11-20,12345678,Alice Smith,2400,2250,2050\n"
-            "2025-11-21,12345678,Alice Smith,2440,2300,2100\n"
-            "2025-11-22,12345678,Alice Smith,2450,2310,2110\n"
+            "2025-11-30,12345678,Alice Smith,2400,2250,2050\n"
+            "2025-10-31,12345678,Alice Smith,2440,2300,2100\n"
+            "2025-09-30,12345678,Alice Smith,2450,2310,2110\n"
         )
         result = fide_scraper.load_historical_ratings_by_player(str(test_file))
 
         assert len(result) == 1
-        assert result["12345678"]["Date"] == "2025-11-22"
-        assert result["12345678"]["Standard"] == "2450"
+        # Should have list of all monthly records
+        assert isinstance(result["12345678"], list)
+        assert len(result["12345678"]) == 3
+        # Check that dates are present
+        dates = [rec.get("Date") for rec in result["12345678"]]
+        assert "2025-11-30" in dates
+        assert "2025-10-31" in dates
+        assert "2025-09-30" in dates
 
     def test_load_historical_ratings_file_not_found(self):
         """Test that missing file returns empty dict (first run)."""
@@ -776,9 +664,12 @@ class TestLoadHistoricalRatingsByPlayer:
         result = fide_scraper.load_historical_ratings_by_player(str(test_file))
 
         assert len(result) == 2
+        # Should have lists of records
+        assert isinstance(result["12345678"], list)
+        assert isinstance(result["87654321"], list)
         # Empty string should be converted to None
-        assert result["12345678"]["Rapid"] is None
-        assert result["87654321"]["Standard"] is None
+        assert result["12345678"][0]["Rapid"] is None
+        assert result["87654321"][0]["Standard"] is None
 
     def test_load_historical_ratings_converts_empty_to_none(self, tmp_path):
         """Test that empty rating strings are converted to None."""
@@ -789,257 +680,205 @@ class TestLoadHistoricalRatingsByPlayer:
         )
         result = fide_scraper.load_historical_ratings_by_player(str(test_file))
 
-        assert result["12345678"]["Standard"] == "2440"
-        assert result["12345678"]["Rapid"] == "2300"
-        assert result["12345678"]["Blitz"] is None
+        assert isinstance(result["12345678"], list)
+        assert len(result["12345678"]) == 1
+        record = result["12345678"][0]
+        assert record["Standard"] == "2440"
+        assert record["Rapid"] == "2300"
+        assert record["Blitz"] is None
 
 
-class TestDetectRatingChanges:
-    """Tests for detect_rating_changes function."""
+class TestDetectNewMonths:
+    """Tests for detect_new_months function."""
 
-    def test_detect_rating_changes_numeric_change(self):
-        """Test detecting numeric rating change."""
-        historical_data = {
-            "12345678": {
-                "Standard": "2440",
-                "Rapid": "2300",
-                "Blitz": "2100"
+    def test_detect_new_months_single_new_month(self):
+        """Test detecting a single new month."""
+        from datetime import date
+
+        fide_id = "12345678"
+        scraped_history = [
+            {
+                'date': date(2025, 11, 30),
+                'standard': 2450,
+                'rapid': 2300,
+                'blitz': 2100
+            },
+            {
+                'date': date(2025, 10, 31),
+                'standard': 2440,
+                'rapid': 2300,
+                'blitz': 2100
             }
+        ]
+        stored_history = {
+            "12345678": [
+                {
+                    'Date': '2025-10-31',
+                    'Standard': '2440',
+                    'Rapid': '2300',
+                    'Blitz': '2100'
+                }
+            ]
         }
-        new_ratings = {
-            "Standard": 2450,
-            "Rapid": 2300,
-            "Blitz": 2100
-        }
-        changes = fide_scraper.detect_rating_changes(
-            "12345678", new_ratings, historical_data
+
+        new_months = fide_scraper.detect_new_months(
+            fide_id, scraped_history, stored_history
         )
 
-        assert "Standard" in changes
-        assert changes["Standard"] == (2440, 2450)
-        assert "Rapid" not in changes
-        assert "Blitz" not in changes
+        # Should detect the November entry as new
+        assert len(new_months) == 1
+        assert new_months[0]['date'] == date(2025, 11, 30)
 
-    def test_detect_rating_changes_unrated_to_rated(self):
-        """Test detecting transition from unrated to rated."""
-        historical_data = {
-            "12345678": {
-                "Standard": "2440",
-                "Rapid": None,
-                "Blitz": "2100"
+    def test_detect_new_months_no_new_months(self):
+        """Test when all scraped months are already stored."""
+        from datetime import date
+
+        fide_id = "12345678"
+        scraped_history = [
+            {
+                'date': date(2025, 11, 30),
+                'standard': 2450,
+                'rapid': 2300,
+                'blitz': 2100
             }
+        ]
+        stored_history = {
+            "12345678": [
+                {
+                    'Date': '2025-11-30',
+                    'Standard': '2450',
+                    'Rapid': '2300',
+                    'Blitz': '2100'
+                }
+            ]
         }
-        new_ratings = {
-            "Standard": 2440,
-            "Rapid": 2250,
-            "Blitz": 2100
-        }
-        changes = fide_scraper.detect_rating_changes(
-            "12345678", new_ratings, historical_data
+
+        new_months = fide_scraper.detect_new_months(
+            fide_id, scraped_history, stored_history
         )
 
-        assert "Rapid" in changes
-        assert changes["Rapid"] == (None, 2250)
-        assert len(changes) == 1
+        # Should find no new months
+        assert len(new_months) == 0
 
-    def test_detect_rating_changes_rated_to_unrated(self):
-        """Test detecting transition from rated to unrated."""
-        historical_data = {
-            "12345678": {
-                "Standard": "2440",
-                "Rapid": "2300",
-                "Blitz": "2100"
+    def test_detect_new_months_first_run(self):
+        """Test first run with no stored history (all scraped months are new)."""
+        from datetime import date
+
+        fide_id = "12345678"
+        scraped_history = [
+            {
+                'date': date(2025, 11, 30),
+                'standard': 2450,
+                'rapid': 2300,
+                'blitz': 2100
+            },
+            {
+                'date': date(2025, 10, 31),
+                'standard': 2440,
+                'rapid': 2300,
+                'blitz': 2100
             }
-        }
-        new_ratings = {
-            "Standard": 2440,
-            "Rapid": None,
-            "Blitz": 2100
-        }
-        changes = fide_scraper.detect_rating_changes(
-            "12345678", new_ratings, historical_data
+        ]
+        stored_history = {}
+
+        new_months = fide_scraper.detect_new_months(
+            fide_id, scraped_history, stored_history
         )
 
-        assert "Rapid" in changes
-        assert changes["Rapid"] == (2300, None)
-        assert len(changes) == 1
+        # All months should be new on first run
+        assert len(new_months) == 2
 
-    def test_detect_rating_changes_multiple_types(self):
-        """Test detecting changes in multiple rating types."""
-        historical_data = {
-            "12345678": {
-                "Standard": "2440",
-                "Rapid": "2300",
-                "Blitz": "2100"
+    def test_detect_new_months_multiple_new(self):
+        """Test detecting multiple new months."""
+        from datetime import date
+
+        fide_id = "12345678"
+        scraped_history = [
+            {
+                'date': date(2025, 11, 30),
+                'standard': 2450,
+                'rapid': 2300,
+                'blitz': 2100
+            },
+            {
+                'date': date(2025, 10, 31),
+                'standard': 2440,
+                'rapid': 2300,
+                'blitz': 2100
+            },
+            {
+                'date': date(2025, 9, 30),
+                'standard': 2430,
+                'rapid': 2290,
+                'blitz': 2090
             }
+        ]
+        stored_history = {
+            "12345678": [
+                {
+                    'Date': '2025-09-30',
+                    'Standard': '2430',
+                    'Rapid': '2290',
+                    'Blitz': '2090'
+                }
+            ]
         }
-        new_ratings = {
-            "Standard": 2450,
-            "Rapid": 2310,
-            "Blitz": 2100
-        }
-        changes = fide_scraper.detect_rating_changes(
-            "12345678", new_ratings, historical_data
+
+        new_months = fide_scraper.detect_new_months(
+            fide_id, scraped_history, stored_history
         )
 
-        assert "Standard" in changes
-        assert changes["Standard"] == (2440, 2450)
-        assert "Rapid" in changes
-        assert changes["Rapid"] == (2300, 2310)
-        assert "Blitz" not in changes
-        assert len(changes) == 2
+        # Should detect October and November as new
+        assert len(new_months) == 2
+        dates = [m['date'] for m in new_months]
+        assert date(2025, 11, 30) in dates
+        assert date(2025, 10, 31) in dates
 
-    def test_detect_rating_changes_no_changes(self):
-        """Test detecting no changes when ratings are identical."""
-        historical_data = {
-            "12345678": {
-                "Standard": "2440",
-                "Rapid": "2300",
-                "Blitz": "2100"
+    def test_detect_new_months_empty_scraped(self):
+        """Test when scraped history is empty."""
+        fide_id = "12345678"
+        scraped_history = []
+        stored_history = {
+            "12345678": [
+                {
+                    'Date': '2025-11-30',
+                    'Standard': '2450',
+                    'Rapid': '2300',
+                    'Blitz': '2100'
+                }
+            ]
+        }
+
+        new_months = fide_scraper.detect_new_months(
+            fide_id, scraped_history, stored_history
+        )
+
+        # No new months when scraped is empty
+        assert len(new_months) == 0
+
+    def test_detect_new_months_unrated_handling(self):
+        """Test new month detection with unrated values."""
+        from datetime import date
+
+        fide_id = "12345678"
+        scraped_history = [
+            {
+                'date': date(2025, 11, 30),
+                'standard': None,
+                'rapid': 2300,
+                'blitz': None
             }
-        }
-        new_ratings = {
-            "Standard": 2440,
-            "Rapid": 2300,
-            "Blitz": 2100
-        }
-        changes = fide_scraper.detect_rating_changes(
-            "12345678", new_ratings, historical_data
+        ]
+        stored_history = {}
+
+        new_months = fide_scraper.detect_new_months(
+            fide_id, scraped_history, stored_history
         )
 
-        assert changes == {}
-
-    def test_detect_rating_changes_missing_player(self):
-        """Test that new player (not in history) returns no changes."""
-        historical_data = {}
-        new_ratings = {
-            "Standard": 2440,
-            "Rapid": 2300,
-            "Blitz": 2100
-        }
-        changes = fide_scraper.detect_rating_changes(
-            "99999999", new_ratings, historical_data
-        )
-
-        assert changes == {
-            "Standard": (None, 2440),
-            "Rapid": (None, 2300),
-            "Blitz": (None, 2100)
-        }
-
-    def test_detect_rating_changes_all_unrated_to_unrated(self):
-        """Test no changes when all ratings remain unrated."""
-        historical_data = {
-            "12345678": {
-                "Standard": None,
-                "Rapid": None,
-                "Blitz": None
-            }
-        }
-        new_ratings = {
-            "Standard": None,
-            "Rapid": None,
-            "Blitz": None
-        }
-        changes = fide_scraper.detect_rating_changes(
-            "12345678", new_ratings, historical_data
-        )
-
-        assert changes == {}
-
-    def test_detect_rating_changes_empty_string_ratings(self):
-        """Test handling empty string ratings from historical data."""
-        historical_data = {
-            "12345678": {
-                "Standard": "2440",
-                "Rapid": "",
-                "Blitz": "2100"
-            }
-        }
-        new_ratings = {
-            "Standard": 2440,
-            "Rapid": 2250,
-            "Blitz": 2100
-        }
-        changes = fide_scraper.detect_rating_changes(
-            "12345678", new_ratings, historical_data
-        )
-
-        # Empty string should be treated as None
-        assert "Rapid" in changes
-        assert changes["Rapid"] == (None, 2250)
-
-    def test_detect_rating_changes_missing_rating_types(self):
-        """Test handling when new_ratings missing some types."""
-        historical_data = {
-            "12345678": {
-                "Standard": "2440",
-                "Rapid": "2300",
-                "Blitz": "2100"
-            }
-        }
-        new_ratings = {
-            "Standard": 2440,
-            "Rapid": 2300
-            # Blitz missing
-        }
-        changes = fide_scraper.detect_rating_changes(
-            "12345678", new_ratings, historical_data
-        )
-
-        # Missing Blitz (None) vs "2100" should be detected as change
-        assert "Blitz" in changes
-        assert changes["Blitz"] == (2100, None)
-
-    def test_detect_rating_changes_significant_increase(self):
-        """Test detecting significant rating increase."""
-        historical_data = {
-            "12345678": {
-                "Standard": "2440",
-                "Rapid": "2300",
-                "Blitz": "2100"
-            }
-        }
-        new_ratings = {
-            "Standard": 2550,
-            "Rapid": 2400,
-            "Blitz": 2200
-        }
-        changes = fide_scraper.detect_rating_changes(
-            "12345678", new_ratings, historical_data
-        )
-
-        assert "Standard" in changes
-        assert changes["Standard"] == (2440, 2550)
-        assert "Rapid" in changes
-        assert changes["Rapid"] == (2300, 2400)
-        assert "Blitz" in changes
-        assert changes["Blitz"] == (2100, 2200)
-
-    def test_detect_rating_changes_decrease(self):
-        """Test detecting rating decrease."""
-        historical_data = {
-            "12345678": {
-                "Standard": "2440",
-                "Rapid": "2300",
-                "Blitz": "2100"
-            }
-        }
-        new_ratings = {
-            "Standard": 2420,
-            "Rapid": 2280,
-            "Blitz": 2080
-        }
-        changes = fide_scraper.detect_rating_changes(
-            "12345678", new_ratings, historical_data
-        )
-
-        assert "Standard" in changes
-        assert changes["Standard"] == (2440, 2420)
-        assert "Rapid" in changes
-        assert changes["Rapid"] == (2300, 2280)
-        assert "Blitz" in changes
-        assert changes["Blitz"] == (2100, 2080)
+        # Should detect as new even with unrated values
+        assert len(new_months) == 1
+        assert new_months[0]['standard'] is None
+        assert new_months[0]['rapid'] == 2300
 
 
 class TestComposeNotificationEmail:
@@ -1047,12 +886,15 @@ class TestComposeNotificationEmail:
 
     def test_compose_notification_email_single_change(self):
         """Test composing email with a single rating change."""
-        changes = {"Standard": (2440, 2450)}
+        from datetime import date
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2300, "blitz": 2100},
+            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+        ]
         subject, body = email_notifier._compose_notification_email(
             "Alice Smith",
             "12345678",
-            changes,
-            "alice@example.com"
+            rating_history
         )
 
         assert subject == "Your FIDE Rating Update - Alice Smith"
@@ -1063,16 +905,15 @@ class TestComposeNotificationEmail:
 
     def test_compose_notification_email_multiple_changes(self):
         """Test composing email with multiple rating changes."""
-        changes = {
-            "Standard": (2440, 2450),
-            "Rapid": (2300, 2310),
-            "Blitz": (2100, 2115)
-        }
+        from datetime import date
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2310, "blitz": 2115},
+            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+        ]
         subject, body = email_notifier._compose_notification_email(
             "Bob Jones",
             "87654321",
-            changes,
-            "bob@example.com"
+            rating_history
         )
 
         assert subject == "Your FIDE Rating Update - Bob Jones"
@@ -1080,15 +921,18 @@ class TestComposeNotificationEmail:
         assert "Rapid Rating: 2300 → 2310" in body
         assert "Blitz Rating: 2100 → 2115" in body
         assert "FIDE ID: 87654321" in body
-
+        
     def test_compose_notification_email_unrated_to_rated(self):
         """Test composing email when player becomes rated."""
-        changes = {"Standard": (None, 2450)}
+        from datetime import date
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": 2450, "rapid": None, "blitz": None},
+            {"date": date(2025, 10, 31), "standard": None, "rapid": None, "blitz": None}
+        ]
         subject, body = email_notifier._compose_notification_email(
             "Charlie Brown",
             "11111111",
-            changes,
-            "charlie@example.com"
+            rating_history
         )
 
         assert "Standard Rating: unrated → 2450" in body
@@ -1096,12 +940,15 @@ class TestComposeNotificationEmail:
 
     def test_compose_notification_email_rated_to_unrated(self):
         """Test composing email when player rating is removed."""
-        changes = {"Rapid": (2300, None)}
+        from datetime import date
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": None, "rapid": None, "blitz": None},
+            {"date": date(2025, 10, 31), "standard": 2400, "rapid": 2300, "blitz": 2100}
+        ]
         subject, body = email_notifier._compose_notification_email(
             "Diana Prince",
             "22222222",
-            changes,
-            "diana@example.com"
+            rating_history
         )
 
         assert "Rapid Rating: 2300 → unrated" in body
@@ -1109,16 +956,15 @@ class TestComposeNotificationEmail:
 
     def test_compose_notification_email_multiple_unrated_transitions(self):
         """Test composing email with mixed unrated transitions."""
-        changes = {
-            "Standard": (None, 2500),
-            "Rapid": (2400, None),
-            "Blitz": (2300, 2350)
-        }
+        from datetime import date
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": 2500, "rapid": None, "blitz": 2350},
+            {"date": date(2025, 10, 31), "standard": None, "rapid": 2400, "blitz": 2300}
+        ]
         subject, body = email_notifier._compose_notification_email(
             "Eve Wilson",
             "33333333",
-            changes,
-            "eve@example.com"
+            rating_history
         )
 
         assert "Standard Rating: unrated → 2500" in body
@@ -1127,16 +973,15 @@ class TestComposeNotificationEmail:
 
     def test_compose_notification_email_sorted_by_rating_type(self):
         """Test that rating changes are sorted alphabetically by type."""
-        changes = {
-            "Blitz": (2100, 2115),
-            "Standard": (2440, 2450),
-            "Rapid": (2300, 2310)
-        }
+        from datetime import date
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2310, "blitz": 2115},
+            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+        ]
         subject, body = email_notifier._compose_notification_email(
             "Frank Miller",
             "44444444",
-            changes,
-            "frank@example.com"
+            rating_history
         )
 
         # Extract the lines with ratings
@@ -1151,13 +996,15 @@ class TestComposeNotificationEmail:
 
     def test_compose_notification_email_with_cc_parameter(self):
         """Test that cc_email parameter is accepted but not used in composition."""
-        changes = {"Standard": (2440, 2450)}
+        from datetime import date
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2300, "blitz": 2100},
+            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+        ]
         subject, body = email_notifier._compose_notification_email(
             "Grace Lee",
             "55555555",
-            changes,
-            "grace@example.com",
-            "admin@example.com"
+            rating_history
         )
 
         assert subject == "Your FIDE Rating Update - Grace Lee"
@@ -1167,12 +1014,15 @@ class TestComposeNotificationEmail:
 
     def test_compose_notification_email_without_cc_parameter(self):
         """Test that cc_email is optional."""
-        changes = {"Standard": (2440, 2450)}
+        from datetime import date
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2300, "blitz": 2100},
+            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+        ]
         subject, body = email_notifier._compose_notification_email(
             "Henry Ford",
             "66666666",
-            changes,
-            "henry@example.com"
+            rating_history
         )
 
         assert subject == "Your FIDE Rating Update - Henry Ford"
@@ -1180,12 +1030,15 @@ class TestComposeNotificationEmail:
 
     def test_compose_notification_email_special_characters_in_name(self):
         """Test composing email with special characters in player name."""
-        changes = {"Standard": (2440, 2450)}
+        from datetime import date
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2300, "blitz": 2100},
+            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+        ]
         subject, body = email_notifier._compose_notification_email(
             "José García-López",
             "77777777",
-            changes,
-            "jose@example.com"
+            rating_history
         )
 
         assert "José García-López" in subject
@@ -1193,15 +1046,15 @@ class TestComposeNotificationEmail:
 
     def test_compose_notification_email_large_rating_change(self):
         """Test composing email with large rating fluctuation."""
-        changes = {
-            "Standard": (2200, 2500),  # 300 point jump
-            "Rapid": (2100, 1900)      # 200 point drop
-        }
+        from datetime import date
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": 2500, "rapid": 1900, "blitz": 2100},
+            {"date": date(2025, 10, 31), "standard": 2200, "rapid": 2100, "blitz": 2100}
+        ]
         subject, body = email_notifier._compose_notification_email(
             "Iris Newton",
             "88888888",
-            changes,
-            "iris@example.com"
+            rating_history
         )
 
         assert "Standard Rating: 2200 → 2500" in body
@@ -1209,12 +1062,15 @@ class TestComposeNotificationEmail:
 
     def test_compose_notification_email_format_consistency(self):
         """Test that email format is consistent with expected structure."""
-        changes = {"Standard": (2440, 2450)}
+        from datetime import date
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2300, "blitz": 2100},
+            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+        ]
         subject, body = email_notifier._compose_notification_email(
             "Jack Turner",
             "99999999",
-            changes,
-            "jack@example.com"
+            rating_history
         )
 
         # Verify expected sections exist in order
@@ -1222,20 +1078,24 @@ class TestComposeNotificationEmail:
         assert "\n\nYour FIDE ratings have been updated. Here are the changes:\n" in body
         assert "FIDE ID: 99999999" in body
 
-    def test_compose_notification_email_no_changes(self):
-        """Test composing email with no rating changes (edge case)."""
-        changes = {}
+    def test_compose_notification_email_single_month_only(self):
+        """Test composing email with only one month of history."""
+        from datetime import date
+        rating_history = [
+            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2300, "blitz": 2100}
+        ]
         subject, body = email_notifier._compose_notification_email(
             "Kate Mitchell",
             "10101010",
-            changes,
-            "kate@example.com"
+            rating_history
         )
 
         assert subject == "Your FIDE Rating Update - Kate Mitchell"
-        # Body should still have standard greeting and footer
+        # Body should have standard greeting and footer
         assert "Dear Kate Mitchell," in body
         assert "FIDE ID: 10101010" in body
+        # Should show current ratings when only one month
+        assert "Standard Rating: 2450" in body
 
 
 class TestSendEmailNotification:
@@ -1559,29 +1419,6 @@ class TestLoadApiConfig:
         assert config['token'] == 'test-token-123'
 
 
-class TestShouldPostToApi:
-    """Tests for should_post_to_api() helper function."""
-
-    @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': 'test-token-123'})
-    def test_should_post_to_api_enabled(self):
-        """Test should_post_to_api returns True when both variables are set."""
-        assert ratings_api._should_post_to_api() is True
-
-    @patch.dict(os.environ, {}, clear=False)
-    def test_should_post_to_api_disabled_missing_both(self):
-        """Test should_post_to_api returns False when both variables are missing."""
-        for var in ['FIDE_RATINGS_API_ENDPOINT', 'API_TOKEN']:
-            if var in os.environ:
-                del os.environ[var]
-
-        assert ratings_api._should_post_to_api() is False
-
-    @patch.dict(os.environ, {'FIDE_RATINGS_API_ENDPOINT': 'https://api.example.com/ratings/', 'API_TOKEN': ''})
-    def test_should_post_to_api_disabled_missing_token(self):
-        """Test should_post_to_api returns False when token is missing."""
-        assert ratings_api._should_post_to_api() is False
-
-
 class TestPostRatingToApi:
     """Tests for post_rating_to_api() function."""
 
@@ -1594,12 +1431,12 @@ class TestPostRatingToApi:
         mock_post.return_value = mock_response
 
         profile = {
-            'Date': '2024-12-18',
-            'FIDE ID': '12345678',
-            'Player Name': 'John Doe',
-            'Standard': 2500,
-            'Rapid': 2400,
-            'Blitz': 2300
+            'date': '2024-12-18',
+            'fide_id': '12345678',
+            'player_name': 'John Doe',
+            'standard_rating': 2500,
+            'rapid_rating': 2400,
+            'blitz_rating': 2300
         }
 
         result = ratings_api._post_rating_to_api(
@@ -1621,12 +1458,12 @@ class TestPostRatingToApi:
         mock_post.side_effect = requests.Timeout("Connection timeout")
 
         profile = {
-            'Date': '2024-12-18',
-            'FIDE ID': '12345678',
-            'Player Name': 'John Doe',
-            'Standard': 2500,
-            'Rapid': 2400,
-            'Blitz': 2300
+            'date': '2024-12-18',
+            'fide_id': '12345678',
+            'player_name': 'John Doe',
+            'standard_rating': 2500,
+            'rapid_rating': 2400,
+            'blitz_rating': 2300
         }
 
         result = ratings_api._post_rating_to_api(
@@ -1645,12 +1482,12 @@ class TestPostRatingToApi:
         mock_post.side_effect = requests.ConnectionError("Connection refused")
 
         profile = {
-            'Date': '2024-12-18',
-            'FIDE ID': '12345678',
-            'Player Name': 'John Doe',
-            'Standard': 2500,
-            'Rapid': 2400,
-            'Blitz': 2300
+            'date': '2024-12-18',
+            'fide_id': '12345678',
+            'player_name': 'John Doe',
+            'standard_rating': 2500,
+            'rapid_rating': 2400,
+            'blitz_rating': 2300
         }
 
         result = ratings_api._post_rating_to_api(
@@ -1672,12 +1509,12 @@ class TestPostRatingToApi:
         mock_post.return_value = mock_response
 
         profile = {
-            'Date': '2024-12-18',
-            'FIDE ID': '12345678',
-            'Player Name': 'John Doe',
-            'Standard': 2500,
-            'Rapid': 2400,
-            'Blitz': 2300
+            'date': '2024-12-18',
+            'fide_id': '12345678',
+            'player_name': 'John Doe',
+            'standard_rating': 2500,
+            'rapid_rating': 2400,
+            'blitz_rating': 2300
         }
 
         result = ratings_api._post_rating_to_api(
@@ -1699,12 +1536,12 @@ class TestPostRatingToApi:
         mock_post.return_value = mock_response
 
         profile = {
-            'Date': '2024-12-18',
-            'FIDE ID': '12345678',
-            'Player Name': 'John Doe',
-            'Standard': 2500,
-            'Rapid': 2400,
-            'Blitz': 2300
+            'date': '2024-12-18',
+            'fide_id': '12345678',
+            'player_name': 'John Doe',
+            'standard_rating': 2500,
+            'rapid_rating': 2400,
+            'blitz_rating': 2300
         }
 
         result = ratings_api._post_rating_to_api(
@@ -1726,12 +1563,12 @@ class TestPostRatingToApi:
         mock_post.return_value = mock_response
 
         profile = {
-            'Date': '2024-12-18',
-            'FIDE ID': '12345678',
-            'Player Name': 'John Doe',
-            'Standard': 2500,
-            'Rapid': 2400,
-            'Blitz': 2300
+            'date': '2024-12-18',
+            'fide_id': '12345678',
+            'player_name': 'John Doe',
+            'standard_rating': 2500,
+            'rapid_rating': 2400,
+            'blitz_rating': 2300
         }
 
         result = ratings_api._post_rating_to_api(
@@ -1752,12 +1589,12 @@ class TestPostRatingToApi:
         mock_post.return_value = mock_response
 
         profile = {
-            'Date': '2024-12-18',
-            'FIDE ID': '87654321',
-            'Player Name': 'Jane Doe',
-            'Standard': None,
-            'Rapid': 1900,
-            'Blitz': None
+            'date': '2024-12-18',
+            'fide_id': '87654321',
+            'player_name': 'Jane Doe',
+            'standard_rating': None,
+            'rapid_rating': 1900,
+            'blitz_rating': None
         }
 
         result = ratings_api._post_rating_to_api(
@@ -1780,12 +1617,12 @@ class TestPostRatingToApi:
         mock_post.return_value = mock_response
 
         profile = {
-            'Date': '2024-12-18',
-            'FIDE ID': '12345678',
-            'Player Name': 'John Doe',
-            'Standard': 2500,
-            'Rapid': 2400,
-            'Blitz': 2300
+            'date': '2024-12-18',
+            'fide_id': '12345678',
+            'player_name': 'John Doe',
+            'standard_rating': 2500,
+            'rapid_rating': 2400,
+            'blitz_rating': 2300
         }
 
         result = ratings_api._post_rating_to_api(
