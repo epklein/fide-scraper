@@ -838,7 +838,7 @@ class TestFideIdsApiIntegration:
 
         # Test fetch
         result = fide_scraper.fetch_fide_ids_from_api(
-            "https://eduklein.cloud/api/fide-ids/",
+            "https://chesshub.cloud/api/fide-ids/",
             "test_token"
         )
 
@@ -866,7 +866,7 @@ class TestFideIdsApiIntegration:
         mock_get.return_value = mock_response
 
         result = fide_scraper.fetch_fide_ids_from_api(
-            "https://eduklein.cloud/api/fide-ids/",
+            "https://chesshub.cloud/api/fide-ids/",
             "test_token"
         )
 
@@ -881,7 +881,7 @@ class TestFideIdsApiIntegration:
         mock_get.return_value = mock_response
 
         result = fide_scraper.fetch_fide_ids_from_api(
-            "https://eduklein.cloud/api/fide-ids/",
+            "https://chesshub.cloud/api/fide-ids/",
             "invalid_token"
         )
 
@@ -894,7 +894,7 @@ class TestFideIdsApiIntegration:
         mock_get.side_effect = requests.exceptions.Timeout()
 
         result = fide_scraper.fetch_fide_ids_from_api(
-            "https://eduklein.cloud/api/fide-ids/",
+            "https://chesshub.cloud/api/fide-ids/",
             "test_token"
         )
 
@@ -1000,7 +1000,7 @@ class TestFideIdsApiIntegration:
 
         # Execute flow
         api_ids = fide_scraper.fetch_fide_ids_from_api(
-            "https://eduklein.cloud/api/fide-ids/",
+            "https://chesshub.cloud/api/fide-ids/",
             "test_token"
         )
         assert api_ids is not None
@@ -1035,7 +1035,7 @@ class TestFideIdsApiIntegration:
 
         # API fetch should fail gracefully
         api_ids = fide_scraper.fetch_fide_ids_from_api(
-            "https://eduklein.cloud/api/fide-ids/",
+            "https://chesshub.cloud/api/fide-ids/",
             "test_token"
         )
         assert api_ids is None
@@ -1064,7 +1064,7 @@ class TestEdgeCases:
 
         # Test with empty token
         result = fide_scraper.fetch_fide_ids_from_api(
-            "https://eduklein.cloud/api/fide-ids/", ""
+            "https://chesshub.cloud/api/fide-ids/", ""
         )
         assert result is None
         assert not mock_get.called, "API should not be called with empty token"
@@ -1141,7 +1141,7 @@ class TestEdgeCases:
 
         # API fetch
         api_ids = fide_scraper.fetch_fide_ids_from_api(
-            "https://eduklein.cloud/api/fide-ids/",
+            "https://chesshub.cloud/api/fide-ids/",
             "test_token"
         )
         assert api_ids is not None

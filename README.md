@@ -290,18 +290,19 @@ The script uses environment variables to configure input, output, and email sett
 - **`ADMIN_CC_EMAIL`**: Administrator email for CC'd copies (optional)
 - **`SMTP_SERVER`**: SMTP server address (default: `localhost`)
 - **`SMTP_PORT`**: SMTP server port (default: `587`)
-- **`SMTP_USERNAME`**: SMTP authentication username (optional)
+- **`SMTP_USERNAME`**: SMTP authentication username (optional, used for SMTP login)
 - **`SMTP_PASSWORD`**: SMTP authentication password (optional)
+- **`FROM_EMAIL`**: Email address to use as the sender (From field). If not set, falls back to SMTP_USERNAME or default (optional)
 
 #### External API Integration
 - **`FIDE_IDS_API_ENDPOINT`**: URL to fetch additional FIDE IDs from external API (optional)
-  - Example: `https://eduklein.cloud/api/fide-ids/`
+  - Example: `https://chesshub.cloud/api/fide-ids/`
   - When set, the scraper augments the players file with IDs from this API before rating retrieval
   - If not set or API is unavailable, scraper proceeds with existing players file only
 - **`API_TOKEN`**: Authentication token for external APIs (required if using FIDE_IDS_API_ENDPOINT or FIDE_RATINGS_API_ENDPOINT)
   - Format: Token will be sent as `Authorization: Token {API_TOKEN}`
 - **`FIDE_RATINGS_API_ENDPOINT`**: URL to post rating updates to external service (optional)
-  - Example: `https://eduklein.cloud/api/fide-ratings/`
+  - Example: `https://chesshub.cloud/api/fide-ratings/`
   - When set, each rating update is posted to this endpoint after scraping
 
 ### Setting Environment Variables

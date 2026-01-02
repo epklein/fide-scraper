@@ -6,11 +6,11 @@ This document defines the contract between the scraper and the external FIDE IDs
 
 ## Endpoint
 
-**Base URL**: `https://eduklein.cloud/api/fide-ids/`
+**Base URL**: `https://chesshub.cloud/api/fide-ids/`
 
 **Endpoint Path**: `/api/fide-ids/`
 
-**Full URL**: `https://eduklein.cloud/api/fide-ids/`
+**Full URL**: `https://chesshub.cloud/api/fide-ids/`
 
 **HTTP Method**: `GET`
 
@@ -26,7 +26,7 @@ This document defines the contract between the scraper and the external FIDE IDs
 
 **Example**:
 ```
-GET https://eduklein.cloud/api/fide-ids/
+GET https://chesshub.cloud/api/fide-ids/
 Authorization: Token your_api_token_here
 ```
 
@@ -172,7 +172,7 @@ Accept: application/json
 ### Using curl
 
 ```bash
-curl -X GET "https://eduklein.cloud/api/fide-ids/" \
+curl -X GET "https://chesshub.cloud/api/fide-ids/" \
   -H "Authorization: Token YOUR_API_TOKEN" \
   -H "Accept: application/json"
 ```
@@ -182,7 +182,7 @@ curl -X GET "https://eduklein.cloud/api/fide-ids/" \
 ```python
 import requests
 
-url = "https://eduklein.cloud/api/fide-ids/"
+url = "https://chesshub.cloud/api/fide-ids/"
 headers = {
     "Authorization": "Token YOUR_API_TOKEN",
     "Accept": "application/json"

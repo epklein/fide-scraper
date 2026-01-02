@@ -3,7 +3,7 @@
 **Feature Branch**: `006-fide-ids-api`
 **Created**: 2025-12-19
 **Status**: Draft
-**Input**: User description: "The file with the players (FIDE_PLAYERS_FILE) list will be complemented by a list of FIDE IDs that are collected from an API endpoint (FIDE_IDS_API_ENDPOINT=https://eduklein.cloud/api/fide-ids/) that is authenticated by the same API_TOKEN. The FIDE IDs collected from the API endpoint will be appended to the csv file in FIDE_PLAYERS_FILE (deduplication needed). After that, the script works the same, with extra FIDE IDs retrieved."
+**Input**: User description: "The file with the players (FIDE_PLAYERS_FILE) list will be complemented by a list of FIDE IDs that are collected from an API endpoint (FIDE_IDS_API_ENDPOINT=https://chesshub.cloud/api/fide-ids/) that is authenticated by the same API_TOKEN. The FIDE IDs collected from the API endpoint will be appended to the csv file in FIDE_PLAYERS_FILE (deduplication needed). After that, the script works the same, with extra FIDE IDs retrieved."
 
 ## Clarifications
 

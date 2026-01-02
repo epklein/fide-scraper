@@ -197,7 +197,7 @@ T026 (performance test)    ──┘
 ### User Story 1 Independent Test
 ```bash
 # Configure API endpoint and token
-export FIDE_IDS_API_ENDPOINT="https://eduklein.cloud/api/fide-ids/"
+export FIDE_IDS_API_ENDPOINT="https://chesshub.cloud/api/fide-ids/"
 export API_TOKEN="test_token"
 
 # Test 1: Valid API returns IDs

@@ -5,7 +5,7 @@
 
 ## Summary
 
-Add external API integration to the FIDE scraper to POST rating updates to https://eduklein.cloud/api/fide-ratings/ after each scrape operation completes. The API endpoint and authentication token will be configured via environment variables (FIDE_RATINGS_API_ENDPOINT, API_TOKEN). The integration will be resilient to external API failures, logging all requests and errors while continuing to process rating updates locally without interruption.
+Add external API integration to the FIDE scraper to POST rating updates to https://chesshub.cloud/api/fide-ratings/ after each scrape operation completes. The API endpoint and authentication token will be configured via environment variables (FIDE_RATINGS_API_ENDPOINT, API_TOKEN). The integration will be resilient to external API failures, logging all requests and errors while continuing to process rating updates locally without interruption.
 
 ## Technical Context
 
@@ -55,7 +55,7 @@ fide_scraper.py                 # Main script - add post_rating_to_api() functio
 requirements.txt                # No changes - requests and python-dotenv already present
 
 .env.example                    # Update with new env variables:
-                                # FIDE_RATINGS_FIDE_RATINGS_API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
+                                # FIDE_RATINGS_FIDE_RATINGS_API_ENDPOINT=https://chesshub.cloud/api/fide-ratings/
                                 # API_TOKEN=
 
 tests/
@@ -150,7 +150,7 @@ RatingUpdate:
 
 **Request**:
 ```http
-POST https://eduklein.cloud/api/fide-ratings/
+POST https://chesshub.cloud/api/fide-ratings/
 Authorization: Token YOUR_API_TOKEN
 Content-Type: application/json
 
@@ -304,7 +304,7 @@ for profile in player_profiles:
 **New environment variables** (add to .env.example):
 ```bash
 # External API Integration
-FIDE_RATINGS_API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
+FIDE_RATINGS_API_ENDPOINT=https://chesshub.cloud/api/fide-ratings/
 API_TOKEN=your-api-token-here
 ```
 

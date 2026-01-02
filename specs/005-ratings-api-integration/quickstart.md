@@ -19,7 +19,7 @@ Add the following to your `.env` file:
 
 ```bash
 # External API Integration
-FIDE_RATINGS_API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
+FIDE_RATINGS_API_ENDPOINT=https://chesshub.cloud/api/fide-ratings/
 API_TOKEN=your-secret-api-token-here
 ```
 
@@ -33,7 +33,7 @@ Keep the example file updated for documentation:
 
 ```bash
 # External API Integration
-FIDE_RATINGS_API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
+FIDE_RATINGS_API_ENDPOINT=https://chesshub.cloud/api/fide-ratings/
 API_TOKEN=your-api-token-here
 ```
 
@@ -145,7 +145,7 @@ API_TOKEN=dev-token-12345
 
 ```bash
 # .env for production deployment
-FIDE_RATINGS_API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
+FIDE_RATINGS_API_ENDPOINT=https://chesshub.cloud/api/fide-ratings/
 API_TOKEN=${API_TOKEN}  # Use secret management system
 ```
 
@@ -213,7 +213,7 @@ python fide_scraper.py 12345678  # Scrape and re-POST
 
 **Diagnosis**:
 1. Check `FIDE_RATINGS_API_ENDPOINT` value: `grep FIDE_RATINGS_API_ENDPOINT .env`
-2. Test connectivity: `curl -I https://eduklein.cloud/api/fide-ratings/`
+2. Test connectivity: `curl -I https://chesshub.cloud/api/fide-ratings/`
 3. Check firewall/network access
 
 **Action**: Fix endpoint URL or network access; scraper continues unaffected
@@ -331,7 +331,7 @@ services:
 Run with environment variables:
 
 ```bash
-export FIDE_RATINGS_API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
+export FIDE_RATINGS_API_ENDPOINT=https://chesshub.cloud/api/fide-ratings/
 export API_TOKEN=your-token-here
 docker-compose up
 ```
@@ -354,7 +354,7 @@ metadata:
   name: fide-api-config
 type: Opaque
 stringData:
-  FIDE_RATINGS_API_ENDPOINT: https://eduklein.cloud/api/fide-ratings/
+  FIDE_RATINGS_API_ENDPOINT: https://chesshub.cloud/api/fide-ratings/
   API_TOKEN: your-token-here
 ---
 apiVersion: batch/v1

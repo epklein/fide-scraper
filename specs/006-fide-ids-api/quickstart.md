@@ -45,7 +45,7 @@ def fetch_fide_ids_from_api(api_endpoint: str, api_token: str) -> Optional[List[
     Fetch FIDE IDs from external API endpoint.
 
     Args:
-        api_endpoint: Full URL to API endpoint (e.g., https://eduklein.cloud/api/fide-ids/)
+        api_endpoint: Full URL to API endpoint (e.g., https://chesshub.cloud/api/fide-ids/)
         api_token: Authentication token for API
 
     Returns:
@@ -189,7 +189,7 @@ def main():
 
 **New Variable**: `FIDE_IDS_API_ENDPOINT`
 - **Value**: Full URL to API endpoint
-- **Example**: `https://eduklein.cloud/api/fide-ids/`
+- **Example**: `https://chesshub.cloud/api/fide-ids/`
 - **Default**: Not set (feature is optional)
 - **Required**: Only if you want to use API ID augmentation
 
@@ -203,11 +203,11 @@ def main():
 # Existing configuration
 FIDE_PLAYERS_FILE=players.csv
 FIDE_OUTPUT_FILE=fide_ratings.csv
-FIDE_RATINGS_API_ENDPOINT=https://eduklein.cloud/api/fide-ratings/
+FIDE_RATINGS_API_ENDPOINT=https://chesshub.cloud/api/fide-ratings/
 API_TOKEN=your_api_token_here
 
 # NEW: FIDE IDs API endpoint
-FIDE_IDS_API_ENDPOINT=https://eduklein.cloud/api/fide-ids/
+FIDE_IDS_API_ENDPOINT=https://chesshub.cloud/api/fide-ids/
 ```
 
 ## Testing Strategy
@@ -293,7 +293,7 @@ FIDE_IDS_API_ENDPOINT=https://eduklein.cloud/api/fide-ids/
 
 ### Kubernetes Deployment (Hostinger)
 - Add ConfigMap entry for `FIDE_IDS_API_ENDPOINT`
-- Verify network access to `eduklein.cloud` API (may need firewall rules)
+- Verify network access to `chesshub.cloud` API (may need firewall rules)
 - Monitor API availability via logs
 
 ### Backward Compatibility

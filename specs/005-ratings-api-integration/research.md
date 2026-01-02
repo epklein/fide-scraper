@@ -74,7 +74,7 @@ This feature requires integrating with an external API to POST rating updates. T
 
 **Log Format Example**:
 ```
-ERROR: API request failed for FIDE ID 12345678: ConnectionError - Failed to connect to https://eduklein.cloud/api/fide-ratings/
+ERROR: API request failed for FIDE ID 12345678: ConnectionError - Failed to connect to https://chesshub.cloud/api/fide-ratings/
 ERROR: API request failed for FIDE ID 87654321: HTTPError - 500 Server Error
 ERROR: API request timeout for FIDE ID 11111111 after 5 seconds (attempted 1 retries)
 INFO: API request successful for FIDE ID 12345678: 200 OK

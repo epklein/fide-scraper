@@ -23,6 +23,7 @@
               SMTP_PORT=${{ vars.SMTP_PORT }}
               SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}
               SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+              FROM_EMAIL=${{ vars.FROM_EMAIL }}
               FIDE_IDS_API_ENDPOINT=${{ vars.FIDE_IDS_API_ENDPOINT }}
               FIDE_RATINGS_API_ENDPOINT=${{ vars.FIDE_RATINGS_API_ENDPOINT }}
               API_TOKEN=${{ secrets.API_TOKEN }}

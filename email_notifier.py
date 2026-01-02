@@ -149,6 +149,7 @@ def _send_email_notification(
         SMTP_PORT: SMTP server port (default: 587)
         SMTP_USERNAME: Optional username for SMTP authentication
         SMTP_PASSWORD: Optional password for SMTP authentication
+        FROM_EMAIL: Email address to use as the sender (From field). If not set, falls back to SMTP_USERNAME or default.
 
     Examples:
         success = _send_email_notification(
@@ -168,16 +169,20 @@ def _send_email_notification(
         smtp_port = int(os.getenv('SMTP_PORT', '587'))
         smtp_username = os.getenv('SMTP_USERNAME', '').strip() or None
         smtp_password = os.getenv('SMTP_PASSWORD', '').strip() or None
+        from_email = os.getenv('FROM_EMAIL', '').strip() or None
 
         # Validate recipient email
         if not recipient or not isinstance(recipient, str):
             logging.error(f"Invalid recipient email: {recipient}")
             return False
 
+        # Determine From email address: FROM_EMAIL > SMTP_USERNAME > default
+        sender_email = from_email if from_email else (smtp_username if smtp_username else 'noreply@chesshub.cloud')
+
         # Create email message
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
-        msg['From'] = smtp_username if smtp_username else 'noreply@fide-monitor.local'
+        msg['From'] = sender_email
         msg['To'] = recipient
 
         # Add CC if provided
@@ -201,9 +206,9 @@ def _send_email_notification(
             if smtp_username and smtp_password:
                 server.login(smtp_username, smtp_password)
 
-            # Send email
+            # Send email (use sender_email for the envelope sender)
             server.sendmail(
-                msg['From'],
+                sender_email,
                 recipient_list,
                 msg.as_string()
             )

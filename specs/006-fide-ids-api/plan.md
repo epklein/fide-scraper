@@ -7,7 +7,7 @@
 
 ## Summary
 
-Extend the FIDE scraper to fetch player FIDE IDs from an external API endpoint (`https://eduklein.cloud/api/fide-ids/`) and merge them with the existing `FIDE_PLAYERS_FILE` CSV, with automatic deduplication. The merged player list is then used by the existing scraper to fetch ratings for both original and newly discovered players. This expands player coverage without requiring manual updates to the configuration file.
+Extend the FIDE scraper to fetch player FIDE IDs from an external API endpoint (`https://chesshub.cloud/api/fide-ids/`) and merge them with the existing `FIDE_PLAYERS_FILE` CSV, with automatic deduplication. The merged player list is then used by the existing scraper to fetch ratings for both original and newly discovered players. This expands player coverage without requiring manual updates to the configuration file.
 
 **Key deliverable**: A startup routine that fetches API IDs, deduplicates them against the CSV file, appends new entries, and passes the augmented list to the scraper's main loop.
 

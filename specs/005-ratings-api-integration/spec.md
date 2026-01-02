@@ -3,7 +3,7 @@
 **Feature Branch**: `005-ratings-api-integration`
 **Created**: 2024-12-18
 **Status**: Draft
-**Input**: User description: "The service should also send ratings updates to an external service through an API endpoint. It is going to POST on an endpoint at https://eduklein.cloud/api/fide-ratings/. The base URL and the authentication token should be saved in the environment file."
+**Input**: User description: "The service should also send ratings updates to an external service through an API endpoint. It is going to POST on an endpoint at https://chesshub.cloud/api/fide-ratings/. The base URL and the authentication token should be saved in the environment file."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -117,7 +117,7 @@ When posting ratings updates to the external API fails (timeout, network error, 
 
 ## Assumptions
 
-- The external API at https://eduklein.cloud/api/fide-ratings/ is available for testing and production use
+- The external API at https://chesshub.cloud/api/fide-ratings/ is available for testing and production use
 - Token-based authentication (Authorization: Token X) is the expected authentication method for this API
 - Environment variables will be provided by the deployment environment/platform
 - Rating updates occur after each scrape operation completes successfully

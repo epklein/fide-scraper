@@ -2,7 +2,7 @@
 
 **Feature**: 005-ratings-api-integration
 **Date**: 2024-12-18
-**Endpoint**: https://eduklein.cloud/api/fide-ratings/
+**Endpoint**: https://chesshub.cloud/api/fide-ratings/
 
 ---
 
@@ -18,9 +18,9 @@ This contract defines the exact format, headers, and behavior for POSTing FIDE p
 
 **HTTP Method**: POST
 
-**Base URL**: https://eduklein.cloud/api/fide-ratings/
+**Base URL**: https://chesshub.cloud/api/fide-ratings/
 
-**Full URL**: https://eduklein.cloud/api/fide-ratings/
+**Full URL**: https://chesshub.cloud/api/fide-ratings/
 
 **Content-Type**: application/json
 
@@ -32,7 +32,7 @@ This contract defines the exact format, headers, and behavior for POSTing FIDE p
 
 ```
 POST /api/fide-ratings/ HTTP/1.1
-Host: eduklein.cloud
+Host: chesshub.cloud
 Authorization: Token {API_TOKEN}
 Content-Type: application/json
 Content-Length: {length}
@@ -279,7 +279,7 @@ Content-Length: {length}
 
 **Request**:
 ```bash
-curl -X POST https://eduklein.cloud/api/fide-ratings/ \
+curl -X POST https://chesshub.cloud/api/fide-ratings/ \
   -H "Authorization: Token my-secret-token-123" \
   -H "Content-Type: application/json" \
   -d '{
@@ -311,7 +311,7 @@ curl -X POST https://eduklein.cloud/api/fide-ratings/ \
 
 **Request** (missing token):
 ```bash
-curl -X POST https://eduklein.cloud/api/fide-ratings/ \
+curl -X POST https://chesshub.cloud/api/fide-ratings/ \
   -H "Content-Type: application/json" \
   -d '{"date": "2024-12-18", "fide_id": "12345678", ...}'
 ```
@@ -327,7 +327,7 @@ curl -X POST https://eduklein.cloud/api/fide-ratings/ \
 
 **Request** (invalid FIDE ID):
 ```bash
-curl -X POST https://eduklein.cloud/api/fide-ratings/ \
+curl -X POST https://chesshub.cloud/api/fide-ratings/ \
   -H "Authorization: Token my-secret-token-123" \
   -H "Content-Type: application/json" \
   -d '{

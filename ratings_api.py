@@ -22,7 +22,7 @@ def _load_api_config() -> Optional[Dict[str, str]]:
         Logs warning if one but not both environment variables are set
 
     Environment variables:
-        - FIDE_RATINGS_API_ENDPOINT: Full URL to API endpoint (e.g., https://eduklein.cloud/api/fide-ratings/)
+        - FIDE_RATINGS_API_ENDPOINT: Full URL to API endpoint (e.g., https://chesshub.cloud/api/fide-ratings/)
         - API_TOKEN: Authentication token for the API
     """
     endpoint = os.getenv('FIDE_RATINGS_API_ENDPOINT', '').strip()
