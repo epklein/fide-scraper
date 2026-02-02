@@ -26,7 +26,7 @@ This document defines the data structures involved in fetching FIDE IDs from the
 
 ### API Response
 
-**Source**: `GET https://chesshub.cloud/api/fide-ids/`
+**Source**: `GET https://app.chesshub.cloud/api/fide-ids/`
 
 **Structure**:
 ```json
