@@ -1236,3 +1236,146 @@ class TestEdgeCases:
         player_data = fide_scraper.load_player_data_from_csv(str(csv_file))
         final_ids = list(player_data.keys())
         assert set(final_ids) == {"11111111", "22222222"}
+
+
+class TestQuickExecutionMode:
+    """Tests for quick execution mode functionality."""
+
+    @patch('fide_scraper.fetch_fide_ids_from_api')
+    def test_quick_mode_selects_only_new_ids(self, mock_fetch):
+        """Test that quick mode selects only new API IDs, not existing CSV IDs."""
+        # Setup: CSV has some IDs, API returns mix of new and existing
+        csv_player_data = {
+            "1001": {"email": "player1@example.com"},
+            "1002": {"email": "player2@example.com"}
+        }
+        mock_fetch.return_value = ["1001", "1002", "1003", "1004"]  # 1003, 1004 are new
+
+        # Call select function in quick mode
+        selected_ids, new_ids = fide_scraper.select_fide_ids_for_processing(
+            mode='quick',
+            api_endpoint='http://api.example.com',
+            api_token='test_token',
+            csv_player_data=csv_player_data
+        )
+
+        # Should select only new IDs: [1003, 1004]
+        assert sorted(selected_ids) == ['1003', '1004']
+        assert sorted(new_ids) == ['1003', '1004']
+
+    @patch('fide_scraper.fetch_fide_ids_from_api')
+    def test_quick_mode_with_no_new_ids(self, mock_fetch):
+        """Test that quick mode handles case where API returns no new IDs."""
+        csv_player_data = {
+            "1001": {"email": "player1@example.com"},
+            "1002": {"email": "player2@example.com"}
+        }
+        mock_fetch.return_value = ["1001", "1002"]  # All are existing
+
+        selected_ids, new_ids = fide_scraper.select_fide_ids_for_processing(
+            mode='quick',
+            api_endpoint='http://api.example.com',
+            api_token='test_token',
+            csv_player_data=csv_player_data
+        )
+
+        # Should select nothing
+        assert selected_ids == []
+        assert new_ids == []
+
+    @patch('fide_scraper.fetch_fide_ids_from_api')
+    def test_quick_mode_with_all_new_ids(self, mock_fetch):
+        """Test that quick mode processes all IDs when they're all new."""
+        csv_player_data = {}  # Empty CSV
+        mock_fetch.return_value = ["2001", "2002", "2003"]  # All are new
+
+        selected_ids, new_ids = fide_scraper.select_fide_ids_for_processing(
+            mode='quick',
+            api_endpoint='http://api.example.com',
+            api_token='test_token',
+            csv_player_data=csv_player_data
+        )
+
+        # Should select all new IDs
+        assert sorted(selected_ids) == ['2001', '2002', '2003']
+        assert sorted(new_ids) == ['2001', '2002', '2003']
+
+    @patch('fide_scraper.fetch_fide_ids_from_api')
+    def test_quick_mode_with_api_failure(self, mock_fetch):
+        """Test that quick mode handles API failure gracefully."""
+        csv_player_data = {"1001": {"email": "player1@example.com"}}
+        mock_fetch.return_value = None  # API failure
+
+        selected_ids, new_ids = fide_scraper.select_fide_ids_for_processing(
+            mode='quick',
+            api_endpoint='http://api.example.com',
+            api_token='test_token',
+            csv_player_data=csv_player_data
+        )
+
+        # Should return empty lists (no new IDs)
+        assert selected_ids == []
+        assert new_ids == []
+
+    @patch('fide_scraper.fetch_fide_ids_from_api')
+    @patch('fide_scraper.merge_player_ids')
+    def test_normal_mode_processes_all_ids(self, mock_merge, mock_fetch):
+        """Test that normal mode processes all CSV IDs plus new API IDs."""
+        csv_player_data = {
+            "1001": {"email": "player1@example.com"},
+            "1002": {"email": "player2@example.com"}
+        }
+        api_ids = ["1001", "1002", "1003", "1004"]
+        all_ids = ["1001", "1002", "1003", "1004"]
+        new_ids = ["1003", "1004"]
+
+        mock_fetch.return_value = api_ids
+        mock_merge.return_value = (all_ids, new_ids)
+
+        selected_ids, returned_new_ids = fide_scraper.select_fide_ids_for_processing(
+            mode='normal',
+            api_endpoint='http://api.example.com',
+            api_token='test_token',
+            csv_player_data=csv_player_data
+        )
+
+        # Normal mode should select all merged IDs
+        assert sorted(selected_ids) == sorted(all_ids)
+        assert sorted(returned_new_ids) == sorted(new_ids)
+
+    @patch('fide_scraper.fetch_fide_ids_from_api')
+    def test_normal_mode_with_no_api(self, mock_fetch):
+        """Test that normal mode uses only CSV IDs when API is not configured."""
+        csv_player_data = {
+            "1001": {"email": "player1@example.com"},
+            "1002": {"email": "player2@example.com"}
+        }
+
+        selected_ids, new_ids = fide_scraper.select_fide_ids_for_processing(
+            mode='normal',
+            api_endpoint='',  # No API
+            api_token='',
+            csv_player_data=csv_player_data
+        )
+
+        # Should select all CSV IDs
+        assert sorted(selected_ids) == ['1001', '1002']
+        assert new_ids == []
+
+    @patch('fide_scraper.fetch_fide_ids_from_api')
+    def test_quick_mode_with_no_api_endpoint(self, mock_fetch):
+        """Test that quick mode handles missing API endpoint."""
+        csv_player_data = {
+            "1001": {"email": "player1@example.com"}
+        }
+
+        selected_ids, new_ids = fide_scraper.select_fide_ids_for_processing(
+            mode='quick',
+            api_endpoint='',  # No endpoint configured
+            api_token='test_token',
+            csv_player_data=csv_player_data
+        )
+
+        # Should return empty (no API to fetch from)
+        assert selected_ids == []
+        assert new_ids == []

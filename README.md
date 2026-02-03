@@ -139,19 +139,63 @@ FIDE_PLAYERS_FILE=players.csv
 FIDE_OUTPUT_FILE=ratings_history.csv
 ```
 
+### Execution Modes
+
+The scraper supports two execution modes:
+
+#### Normal Mode (Default)
+Processes all FIDE IDs from the `players.csv` file (including any newly added by the API).
+
+```bash
+python fide_scraper.py
+```
+
+Use this for:
+- Complete batch runs that process all players
+- Initial setup and full dataset synchronization
+- Comprehensive data updates
+
+#### Quick Mode (--quick)
+Processes only new FIDE IDs returned by the external API, skipping existing players already in `players.csv`. This is much faster if your player list is large but you only have a few new players to process.
+
+```bash
+python fide_scraper.py --quick
+```
+
+Quick mode will:
+1. Fetch new FIDE IDs from the configured API endpoint
+2. Compare them with existing IDs in `players.csv`
+3. Process **only the new IDs** (not in the current file)
+4. Add new IDs to `players.csv` for future tracking
+5. Still send notifications and API updates for new players
+
+**Use quick mode when:**
+- Running frequent incremental updates (e.g., multiple times per day)
+- You want to focus on recently added players
+- Your player list is large but new additions are infrequent
+- You want faster execution during peak hours
+
+**Example workflow:**
+- Run `python fide_scraper.py --quick` every 4 hours (quick incremental updates)
+- Run `python fide_scraper.py` once daily during off-peak hours (full sync)
+
+**Note:** Quick mode requires the FIDE IDs API to be configured (see External API Integration section). If the API is unavailable, quick mode exits gracefully with no players processed.
+
 ### Step 3: View Results
 
 **Console Output**:
 ```
-Processing FIDE IDs from file: fide_ids.txt
+Latest FIDE Ratings:
 
 Date         FIDE ID      Player Name          Standard  Rapid  Blitz
 --------------------------------------------------------------------
 2025-01-27   1503014      Magnus Carlsen       2830      2780   2760
 2025-01-27   2016192      Hikaru Nakamura      2758      2800   2790
 
-Output written to: fide_ratings.csv
 Processed 2 IDs successfully, 0 errors
+Output written to: cbx_ratings.csv
+Email notifications: 1 sent, 0 failed
+API updates: 5 posted, 0 failed
 ```
 
 **CSV Output File**:

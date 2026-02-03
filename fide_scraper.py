@@ -23,6 +23,13 @@ from ratings_api import send_batch_api_updates
 # Load environment variables from .env file
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Constants and environment-based configuration
 # Player data file (unified CSV with FIDE IDs and emails)
 FIDE_PLAYERS_FILE = os.getenv('FIDE_PLAYERS_FILE', 'players.csv')
@@ -114,6 +121,7 @@ def _parse_english_month(month_abbr: str) -> int:
 
     if month_abbr not in month_map:
         raise ValueError(f"Invalid English month abbreviation: {month_abbr}")
+    
     return month_map[month_abbr]
 
 
@@ -423,6 +431,7 @@ def extract_rating_history(html: str) -> List[Dict]:
 
     Args:
         html: HTML content from FIDE profile page
+        
     Returns:
         List of monthly rating records with keys: date, standard, rapid, blitz
         Returns empty list if extraction fails or no data found
@@ -511,11 +520,6 @@ def load_player_data_from_csv(filepath: str) -> Dict[str, Dict[str, str]]:
     Side Effects:
         Logs warnings to stderr for invalid entries that are skipped
     """
-    import logging
-
-    # Set up logging for warnings
-    logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
-    logger = logging.getLogger(__name__)
 
     player_data = {}
 
@@ -541,18 +545,12 @@ def load_player_data_from_csv(filepath: str) -> Dict[str, Dict[str, str]]:
 
                 # Validate FIDE ID
                 if not validate_fide_id(fide_id):
-                    print(
-                        f"Warning: Line {row_num} - Invalid FIDE ID '{fide_id}' (skipped)",
-                        file=sys.stderr
-                    )
+                    logger.warning(f"Line {row_num} - Invalid FIDE ID '{fide_id}' (skipped)")
                     continue
 
                 # Validate email (empty is ok, but must be valid if provided)
                 if not validate_email(email):
-                    print(
-                        f"Warning: Line {row_num} - Invalid email '{email}' for FIDE ID {fide_id} (skipped)",
-                        file=sys.stderr
-                    )
+                    logger.warning(f"Line {row_num} - Invalid email '{email}' for FIDE ID {fide_id} (skipped)")
                     continue
 
                 # Add to player data
@@ -704,6 +702,72 @@ def merge_player_ids(csv_ids: List[str], api_ids: List[str]) -> Tuple[List[str],
     logging.info(f"Merge summary: {csv_count} CSV IDs + {api_count} API IDs → {total_count} unique IDs, +{new_count} new")
 
     return all_ids, new_ids
+
+
+def select_fide_ids_for_processing(
+    mode: str,
+    api_endpoint: str,
+    api_token: str,
+    csv_player_data: dict
+) -> Tuple[List[str], List[str]]:
+    """
+    Select FIDE IDs for processing based on execution mode.
+
+    In normal mode, processes all IDs from CSV (after merging with API).
+    In quick mode, processes only new IDs returned by the API.
+
+    Args:
+        mode: Execution mode - 'normal' or 'quick'
+        api_endpoint: Full URL to FIDE IDs API endpoint
+        api_token: Authentication token for API
+        csv_player_data: Dictionary of player data loaded from CSV
+
+    Returns:
+        Tuple of:
+        - selected_ids: List of FIDE IDs to process
+        - new_ids: List of new IDs to augment into the CSV
+
+    Side Effects:
+        - Logs mode selection and ID counts
+        - Fetches from API if endpoint and token are configured
+    """
+    csv_ids = list(csv_player_data.keys()) if csv_player_data else []
+    new_ids = []
+
+    logging.info(f"Execution mode: {mode}")
+    logging.info(f"Current CSV contains {len(csv_ids)} FIDE IDs")
+
+    # Fetch API IDs if configured
+    api_ids = None
+    if api_endpoint and api_token:
+        logging.info("Fetching FIDE IDs from API")
+        api_ids = fetch_fide_ids_from_api(api_endpoint, api_token)
+        if api_ids:
+            # Compute new IDs (API minus CSV)
+            csv_set = set(csv_ids)
+            api_set = set(api_ids)
+            new_ids = sorted(list(api_set - csv_set))
+            logging.info(f"API returned {len(api_ids)} IDs, {len(new_ids)} are new")
+        else:
+            logging.warning("Failed to fetch FIDE IDs from API")
+    else:
+        logging.info("FIDE IDs API is not configured (optional feature)")
+
+    # Select IDs based on mode
+    if mode.lower() == 'quick':
+        selected_ids = new_ids
+        logging.info(f"Quick mode: selected {len(selected_ids)} new IDs for processing")
+    else:  # normal mode
+        # In normal mode, process all CSV IDs (which may have been augmented with new API IDs)
+        if api_ids:
+            # Merge CSV and API IDs
+            all_ids, new_ids = merge_player_ids(csv_ids, api_ids)
+            selected_ids = all_ids
+        else:
+            selected_ids = csv_ids
+        logging.info(f"Normal mode: selected {len(selected_ids)} IDs for processing")
+
+    return selected_ids, new_ids
 
 
 def augment_players_file(csv_path: str, new_ids: List[str]) -> bool:
@@ -1123,14 +1187,32 @@ def main():
         description='FIDE Rating Scraper - Batch process chess player ratings from FIDE website',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Batch Processing Mode:
+Execution Modes:
+
+  Normal Mode (default):
+    Processes all FIDE IDs from players.csv file (including any new IDs from API).
+    $ python fide_scraper.py
+
+  Quick Mode (--quick):
+    Processes only new FIDE IDs returned by the API (not in players.csv).
+    Useful for incremental runs focused on recently added players.
+    $ python fide_scraper.py --quick
+
+Configuration:
   Reads FIDE IDs from the file specified in FIDE_PLAYERS_FILE environment variable
   (default: players.csv) and writes results to FIDE_OUTPUT_FILE (default: fide_ratings.csv).
-
-  Configure these paths by creating a .env file or setting environment variables.
   See .env.example for configuration options.
         """
     )
+
+    parser.add_argument(
+        '--quick',
+        action='store_true',
+        help='Quick mode: process only new FIDE IDs from API (skip existing players.csv IDs)'
+    )
+
+    args = parser.parse_args()
+    execution_mode = 'quick' if args.quick else 'normal'
 
     # Batch processing mode
     try:
@@ -1141,36 +1223,39 @@ Batch Processing Mode:
             # File doesn't exist yet; will be created if API adds IDs
             player_data = {}
 
-        # Augment players file with FIDE IDs from API if configured
+        # Get API configuration
         api_endpoint = os.getenv('FIDE_IDS_API_ENDPOINT', '').strip()
         api_token = os.getenv('API_TOKEN', '').strip()
 
-        if api_endpoint and api_token:
-            logging.info("FIDE IDs API is configured, attempting to fetch and augment players file")
-            api_ids = fetch_fide_ids_from_api(api_endpoint, api_token)
-            if api_ids:
-                csv_ids = list(player_data.keys())
-                all_ids, new_ids = merge_player_ids(csv_ids, api_ids)
-                success = augment_players_file(FIDE_PLAYERS_FILE, new_ids)
-                if success:
-                    logging.info(f"Players file successfully augmented with {len(new_ids)} new FIDE IDs from API")
-                    # Reload player data after augmenting the file
-                    player_data = load_player_data_from_csv(FIDE_PLAYERS_FILE)
-                else:
-                    logging.warning("Failed to augment players file; continuing with existing file")
+        # Select FIDE IDs based on execution mode
+        fide_ids, new_ids = select_fide_ids_for_processing(
+            execution_mode,
+            api_endpoint,
+            api_token,
+            player_data
+        )
+
+        # Augment players file with new IDs if any were discovered
+        if new_ids:
+            success = augment_players_file(FIDE_PLAYERS_FILE, new_ids)
+            if success:
+                logging.info(f"Players file successfully augmented with {len(new_ids)} new FIDE IDs")
+                # Reload player data after augmenting the file
+                player_data = load_player_data_from_csv(FIDE_PLAYERS_FILE)
             else:
-                logging.warning("Failed to fetch FIDE IDs from API; continuing with existing players file")
-        else:
-            logging.info("FIDE IDs API is not configured (optional feature)")
+                logging.warning("Failed to augment players file; continuing with selected IDs")
 
-        if not player_data:
-            print("Error: Player data file is empty or contains no valid players.", file=sys.stderr)
-            sys.exit(2)
+        if not fide_ids:
+            if execution_mode == 'quick':
+                # In quick mode, no new IDs is valid (not an error)
+                logger.info("Quick mode: no new FIDE IDs found from API")
+                sys.exit(0)
+            else:
+                # In normal mode, empty list is an error
+                logger.error("Player data file is empty or contains no valid players")
+                sys.exit(2)
 
-        # Extract FIDE IDs from the loaded player data
-        fide_ids = list(player_data.keys())
-
-        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Processing {len(fide_ids)} players from file: {FIDE_PLAYERS_FILE}\n")
+        logger.info(f"[{execution_mode.upper()}] Processing {len(fide_ids)} players")
 
         # Process batch to fetch ratings
         results, errors = process_batch(fide_ids)
@@ -1178,24 +1263,19 @@ Batch Processing Mode:
         # Write CSV output
         write_csv_output(OUTPUT_FILENAME, results)
 
-
         # Send email notifications for players with rating changes
-        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Sending email notifications...")
+        logger.info("Sending email notifications...")
         email_sent, email_failed = send_batch_notifications(results, player_data)
-        print("\n")
 
         # Post ratings updates to external API if configured
-        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Posting rating updates to external API...")
+        logger.info("Posting rating updates to external API...")
         api_posted, api_failed = send_batch_api_updates(results)
-        print("\n")
 
         # Display console output
         console_output = format_console_output(results)
 
-        print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Latest FIDE Ratings:\n")
-
+        print("Latest FIDE Ratings: ")
         print(console_output)
-        print("\n")
 
         # Print summary
         success_count = len(results)
@@ -1204,10 +1284,8 @@ Batch Processing Mode:
         print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Summary:")
         print(f"- Processed {success_count} IDs successfully, {error_count} errors")
         print(f"- Output written to: {OUTPUT_FILENAME}")
-        if email_sent > 0 or email_failed > 0:
-            print(f"- Email notifications: {email_sent} sent, {email_failed} failed")
-        if api_posted > 0 or api_failed > 0:
-            print(f"- API updates: {api_posted} posted, {api_failed} failed")
+        print(f"- Email notifications: {email_sent} sent, {email_failed} failed")
+        print(f"- API updates: {api_posted} posted, {api_failed} failed")
 
         # Exit code: 0 if at least one success, 1 if all failed
         if success_count > 0:
