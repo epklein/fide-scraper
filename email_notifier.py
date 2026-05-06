@@ -304,13 +304,13 @@ def send_batch_notifications(
 
             if success:
                 sent_count += 1
-                print(f"✓ Email sent to {player_name} ({player_email})", file=sys.stderr)
+                logging.debug(f"Email sent to {player_name} ({player_email})")
             else:
                 failed_count += 1
-                print(f"✗ Failed to send email to {player_name} ({player_email})", file=sys.stderr)
+                logging.error(f"Failed to send email to {player_name} ({player_email})")
 
         except Exception as e:
             failed_count += 1
-            print(f"✗ Error sending email to {fide_id}: {e}", file=sys.stderr)
+            logging.error(f"Error sending email to {fide_id}: {e}")
 
     return sent_count, failed_count

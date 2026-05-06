@@ -107,7 +107,7 @@ def _post_rating_to_api(
 
             # Check for success
             if response.status_code == 200:
-                logging.info(f"API request successful for FIDE ID {fide_id}: {response.status_code} OK")
+                logging.debug(f"API request successful for FIDE ID {fide_id}: {response.status_code} OK")
                 return True
             else:
                 # HTTP error (4xx, 5xx, etc.)
@@ -213,9 +213,10 @@ def send_batch_api_updates(
                 else:
                     failed_count += 1
 
-            print(f"✓ API updates posted for {player_name} ({fide_id}) - {len(new_months)} months", file=sys.stderr)
+            logging.debug(f"API updates posted for {player_name} ({fide_id}) - {len(new_months)} months")
+
         except Exception as e:
             failed_count += len(new_months)
-            print(f"✗ Error posting API update for {fide_id}: {e}", file=sys.stderr)
+            logging.error(f"Error posting API update for {fide_id}: {e}")
 
     return posted_count, failed_count

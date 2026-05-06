@@ -20,9 +20,9 @@ services:
       # Mount data directory for players.csv input and fide_ratings.csv output
       - /data/fide-scraper:/data
     networks:
-      - fide-network
+      - chess-wizard-network
     restart: "no"  # Disabled - use cron for scheduling instead
 
 networks:
-  fide-network:
-    driver: bridge
+  chess-wizard-network:
+    external: true
