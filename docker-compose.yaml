@@ -4,7 +4,6 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: fide-scraper
-    profiles: ["scrapers"]
     environment:
       # Email Notification Settings (from .env or defaults)
       ADMIN_CC_EMAIL: ${ADMIN_CC_EMAIL}

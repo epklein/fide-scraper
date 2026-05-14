@@ -17,5 +17,5 @@ COPY *.py .
 # Create data and output directories for volume mounts
 RUN mkdir -p /data && chmod 777 /data
 
-# Default command: run batch processing
-CMD ["python", "fide_scraper.py"]
+# No entrypoint or command specified
+# Run the container from a Cron job
