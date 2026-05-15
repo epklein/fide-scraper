@@ -76,7 +76,7 @@ Change detection results SHALL contain only the new months, with sufficient deta
 Given a detected new month
 When returned in change detection results
 Then it should contain:
-  - `date`: ISO 8601 date of the month (last day)
+  - `date`: ISO 8601 date of the month (first day)
   - `standard`: Standard rating value (or None)
   - `rapid`: Rapid rating value (or None)
   - `blitz`: Blitz rating value (or None)

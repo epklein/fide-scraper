@@ -2,7 +2,7 @@
 
 ## Overview
 
-Store player rating records with monthly granularity (one row per month per player) instead of daily granularity. Each month is identified by the last day of that month.
+Store player rating records with monthly granularity (one row per month per player) instead of daily granularity. Each month is identified by the first day of that month.
 
 ## MODIFIED Requirements
 
@@ -36,7 +36,7 @@ And the file should contain M months for player1 and N months for player2
 
 ### Requirement: CSV Column Format
 
-The CSV output file SHALL continue using the "Date" column, but values now represent the last day of each month (ISO 8601 format) instead of the current date.
+The CSV output file SHALL continue using the "Date" column, but values now represent the first day of each month (ISO 8601 format) instead of the current date.
 
 **ID:** `RS-002`
 **Breaking Change:** No (column name preserved, semantics change only)
@@ -50,8 +50,8 @@ Then the columns should be: `Date,FIDE ID,Player Name,Standard,Rapid,Blitz` (unc
 Given a player with records for November 2025 and October 2025
 When written to CSV
 Then the Date column should contain values like:
-  - `2025-11-30` (last day of November)
-  - `2025-10-31` (last day of October)
+  - `2025-11-01` (first day of November)
+  - `2025-10-01` (first day of October)
 
 ---
 
@@ -77,7 +77,7 @@ And May should be updated with new values
 ## Implementation Notes
 
 - Use ISO 8601 date format for month values (YYYY-MM-DD)
-- Calculate last day of month using `calendar.monthrange()` or equivalent
+- Use first day of month (always day 1) — no calendar math needed
 - Read entire CSV on write, filter out matching months, append updated months (for simplicity)
 - Preserve month order in CSV (optional - can be any order, or can sort by month)
 - Empty string represents unrated/missing values in rating columns (backward compatible)

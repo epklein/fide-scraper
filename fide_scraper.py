@@ -16,7 +16,6 @@ import argparse
 from dotenv import load_dotenv
 import logging
 from datetime import datetime
-import calendar
 from email_notifier import send_batch_notifications
 from ratings_api import send_batch_api_updates
 
@@ -126,42 +125,21 @@ def _parse_english_month(month_abbr: str) -> int:
     return month_map[month_abbr]
 
 
-def _calculate_month_end_date(year: int, month: int) -> date:
-    """
-    Calculate the last day of a given month/year.
-
-    Args:
-        year: Calendar year
-        month: Month number (1-12)
-
-    Returns:
-        date object for the last day of the month
-
-    Examples:
-        >>> _calculate_month_end_date(2025, 11)
-        datetime.date(2025, 11, 30)
-        >>> _calculate_month_end_date(2024, 2)  # Leap year
-        datetime.date(2024, 2, 29)
-    """
-    last_day = calendar.monthrange(year, month)[1]
-    return date(year, month, last_day)
-
-
 def _parse_month_year_string(month_year_str: str) -> Optional[date]:
     """
-    Parse English Year-month string to ISO 8601 date (last day of month).
+    Parse English Year-month string to ISO 8601 date (first day of month).
 
     Args:
         month_year_str: Year-Month string in format "Year-Month" (e.g., "2025-Nov", "2025-Oct")
 
     Returns:
-        date object for the last day of the month, or None if parsing fails
+        date object for the first day of the month, or None if parsing fails
 
     Examples:
         >>> _parse_month_year_string("2025-Nov")
-        datetime.date(2025, 11, 30)
+        datetime.date(2025, 11, 1)
         >>> _parse_month_year_string("2025-Oct")
-        datetime.date(2025, 10, 31)
+        datetime.date(2025, 10, 1)
         >>> _parse_month_year_string("Invalid/2025")
         None
     """
@@ -183,8 +161,7 @@ def _parse_month_year_string(month_year_str: str) -> Optional[date]:
         # Parse month abbreviation
         month = _parse_english_month(month_abbr)
 
-        # Calculate and return last day of month
-        return _calculate_month_end_date(year, month)
+        return date(year, month, 1)
 
     except (ValueError, IndexError):
         return None
@@ -373,7 +350,7 @@ def _convert_raw_history_to_records(raw_history: List[Dict]) -> List[Dict]:
     Convert raw history rows to final monthly records with parsed dates.
 
     Takes raw history from _extract_all_history_rows, deduplicates by month,
-    and converts month/year strings to ISO 8601 dates (last day of month).
+    and converts month/year strings to ISO 8601 dates (first day of month).
 
     Args:
         raw_history: List of raw history row dicts from _extract_all_history_rows
@@ -389,7 +366,7 @@ def _convert_raw_history_to_records(raw_history: List[Dict]) -> List[Dict]:
         ... ]
         >>> records = _convert_raw_history_to_records(raw)
         >>> records[0]['date']
-        datetime.date(2025, 11, 30)
+        datetime.date(2025, 11, 1)
     """
     # First deduplicate
     deduplicated = _deduplicate_history_by_month(raw_history)
@@ -442,7 +419,7 @@ def extract_rating_history(html: str) -> List[Dict]:
         >>> len(history)
         7
         >>> history[0]['date']
-        datetime.date(2025, 11, 30)
+        datetime.date(2025, 11, 1)
         >>> history[0]['rapid']
         1884
     """
@@ -848,8 +825,8 @@ def load_historical_ratings_by_player(filepath: str) -> Dict[str, List[Dict]]:
         Dictionary mapping FIDE ID to list of monthly rating records:
         {
             fide_id: [
-                {"Date": "2025-11-30", "Player Name": "...", "Standard": ..., ...},
-                {"Date": "2025-10-31", "Player Name": "...", "Standard": ..., ...},
+                {"Date": "2025-11-01", "Player Name": "...", "Standard": ..., ...},
+                {"Date": "2025-10-01", "Player Name": "...", "Standard": ..., ...},
                 ...
             ],
             ...
@@ -926,7 +903,7 @@ def detect_new_months(
                         Format: [{"date": date_obj, "standard": int, ...}, ...]
         stored_history: Dictionary indexed by FIDE ID with list of stored monthly records
                        (from load_historical_ratings_by_player)
-                       Format: {fide_id: [{"Date": "2025-11-30", "Standard": "1800", ...}, ...], ...}
+                       Format: {fide_id: [{"Date": "2025-11-01", "Standard": "1800", ...}, ...], ...}
 
     Returns:
         List of new monthly records (format same as scraped_history records)
@@ -936,16 +913,16 @@ def detect_new_months(
         # New month detected
         new_months = detect_new_months(
             "12345678",
-            [{"date": date(2025, 11, 30), "standard": 1800, "rapid": 1884, "blitz": 1800}],
-            {"12345678": [{"Date": "2025-10-31", "Standard": "1800", ...}]}
+            [{"date": date(2025, 11, 1), "standard": 1800, "rapid": 1884, "blitz": 1800}],
+            {"12345678": [{"Date": "2025-10-01", "Standard": "1800", ...}]}
         )
         # Returns one new month record
 
         # No new months
         new_months = detect_new_months(
             "12345678",
-            [{"date": date(2025, 11, 30), "standard": 1800, "rapid": 1884, "blitz": 1800}],
-            {"12345678": [{"Date": "2025-11-30", "Standard": "1800", ...}]}
+            [{"date": date(2025, 11, 1), "standard": 1800, "rapid": 1884, "blitz": 1800}],
+            {"12345678": [{"Date": "2025-11-01", "Standard": "1800", ...}]}
         )
         # Returns empty list
     """
@@ -984,7 +961,7 @@ def write_csv_output(filename: str, player_profiles: List[Dict]) -> None:
     from their rating_history. If a month already exists for a player, the existing row is
     replaced (UPDATE semantics).
 
-    The Date column contains the last day of each month (e.g., 2025-11-30 for November 2025).
+    The Date column contains the first day of each month (e.g., 2025-11-01 for November 2025).
 
     Args:
         filename: Path to output CSV file

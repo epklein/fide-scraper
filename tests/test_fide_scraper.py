@@ -307,15 +307,14 @@ class TestCSVGeneration:
         """Test that CSV output preserves entries from previous months."""
         output_file = tmp_path / "test_output.csv"
         from datetime import date
-        from calendar import monthrange
 
         # Create a file with last month's data
         today = date.today()
-        # Get last day of previous month
+        # Get first day of previous month
         if today.month == 1:
-            last_month_date = date(today.year - 1, 12, 31)
+            last_month_date = date(today.year - 1, 12, 1)
         else:
-            last_month_date = date(today.year, today.month - 1, monthrange(today.year, today.month - 1)[1])
+            last_month_date = date(today.year, today.month - 1, 1)
 
         last_month_str = last_month_date.isoformat()
 
@@ -614,9 +613,9 @@ class TestLoadHistoricalRatingsByPlayer:
         test_file = tmp_path / "fide_ratings.csv"
         test_file.write_text(
             "Date,FIDE ID,Player Name,Standard,Rapid,Blitz\n"
-            "2025-11-30,12345678,Alice Smith,2400,2250,2050\n"
-            "2025-10-31,12345678,Alice Smith,2440,2300,2100\n"
-            "2025-09-30,12345678,Alice Smith,2450,2310,2110\n"
+            "2025-11-01,12345678,Alice Smith,2400,2250,2050\n"
+            "2025-10-01,12345678,Alice Smith,2440,2300,2100\n"
+            "2025-09-01,12345678,Alice Smith,2450,2310,2110\n"
         )
         result = fide_scraper.load_historical_ratings_by_player(str(test_file))
 
@@ -626,9 +625,9 @@ class TestLoadHistoricalRatingsByPlayer:
         assert len(result["12345678"]) == 3
         # Check that dates are present
         dates = [rec.get("Date") for rec in result["12345678"]]
-        assert "2025-11-30" in dates
-        assert "2025-10-31" in dates
-        assert "2025-09-30" in dates
+        assert "2025-11-01" in dates
+        assert "2025-10-01" in dates
+        assert "2025-09-01" in dates
 
     def test_load_historical_ratings_file_not_found(self):
         """Test that missing file returns empty dict (first run)."""
@@ -698,13 +697,13 @@ class TestDetectNewMonths:
         fide_id = "12345678"
         scraped_history = [
             {
-                'date': date(2025, 11, 30),
+                'date': date(2025, 11, 1),
                 'standard': 2450,
                 'rapid': 2300,
                 'blitz': 2100
             },
             {
-                'date': date(2025, 10, 31),
+                'date': date(2025, 10, 1),
                 'standard': 2440,
                 'rapid': 2300,
                 'blitz': 2100
@@ -713,7 +712,7 @@ class TestDetectNewMonths:
         stored_history = {
             "12345678": [
                 {
-                    'Date': '2025-10-31',
+                    'Date': '2025-10-01',
                     'Standard': '2440',
                     'Rapid': '2300',
                     'Blitz': '2100'
@@ -727,7 +726,7 @@ class TestDetectNewMonths:
 
         # Should detect the November entry as new
         assert len(new_months) == 1
-        assert new_months[0]['date'] == date(2025, 11, 30)
+        assert new_months[0]['date'] == date(2025, 11, 1)
 
     def test_detect_new_months_no_new_months(self):
         """Test when all scraped months are already stored."""
@@ -736,7 +735,7 @@ class TestDetectNewMonths:
         fide_id = "12345678"
         scraped_history = [
             {
-                'date': date(2025, 11, 30),
+                'date': date(2025, 11, 1),
                 'standard': 2450,
                 'rapid': 2300,
                 'blitz': 2100
@@ -745,7 +744,7 @@ class TestDetectNewMonths:
         stored_history = {
             "12345678": [
                 {
-                    'Date': '2025-11-30',
+                    'Date': '2025-11-01',
                     'Standard': '2450',
                     'Rapid': '2300',
                     'Blitz': '2100'
@@ -767,13 +766,13 @@ class TestDetectNewMonths:
         fide_id = "12345678"
         scraped_history = [
             {
-                'date': date(2025, 11, 30),
+                'date': date(2025, 11, 1),
                 'standard': 2450,
                 'rapid': 2300,
                 'blitz': 2100
             },
             {
-                'date': date(2025, 10, 31),
+                'date': date(2025, 10, 1),
                 'standard': 2440,
                 'rapid': 2300,
                 'blitz': 2100
@@ -795,19 +794,19 @@ class TestDetectNewMonths:
         fide_id = "12345678"
         scraped_history = [
             {
-                'date': date(2025, 11, 30),
+                'date': date(2025, 11, 1),
                 'standard': 2450,
                 'rapid': 2300,
                 'blitz': 2100
             },
             {
-                'date': date(2025, 10, 31),
+                'date': date(2025, 10, 1),
                 'standard': 2440,
                 'rapid': 2300,
                 'blitz': 2100
             },
             {
-                'date': date(2025, 9, 30),
+                'date': date(2025, 9, 1),
                 'standard': 2430,
                 'rapid': 2290,
                 'blitz': 2090
@@ -816,7 +815,7 @@ class TestDetectNewMonths:
         stored_history = {
             "12345678": [
                 {
-                    'Date': '2025-09-30',
+                    'Date': '2025-09-01',
                     'Standard': '2430',
                     'Rapid': '2290',
                     'Blitz': '2090'
@@ -831,8 +830,8 @@ class TestDetectNewMonths:
         # Should detect October and November as new
         assert len(new_months) == 2
         dates = [m['date'] for m in new_months]
-        assert date(2025, 11, 30) in dates
-        assert date(2025, 10, 31) in dates
+        assert date(2025, 11, 1) in dates
+        assert date(2025, 10, 1) in dates
 
     def test_detect_new_months_empty_scraped(self):
         """Test when scraped history is empty."""
@@ -841,7 +840,7 @@ class TestDetectNewMonths:
         stored_history = {
             "12345678": [
                 {
-                    'Date': '2025-11-30',
+                    'Date': '2025-11-01',
                     'Standard': '2450',
                     'Rapid': '2300',
                     'Blitz': '2100'
@@ -863,7 +862,7 @@ class TestDetectNewMonths:
         fide_id = "12345678"
         scraped_history = [
             {
-                'date': date(2025, 11, 30),
+                'date': date(2025, 11, 1),
                 'standard': None,
                 'rapid': 2300,
                 'blitz': None
@@ -888,8 +887,8 @@ class TestComposeNotificationEmail:
         """Test composing email with a single rating change."""
         from datetime import date
         rating_history = [
-            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2300, "blitz": 2100},
-            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+            {"date": date(2025, 11, 1), "standard": 2450, "rapid": 2300, "blitz": 2100},
+            {"date": date(2025, 10, 1), "standard": 2440, "rapid": 2300, "blitz": 2100}
         ]
         subject, body = email_notifier._compose_notification_email(
             "Alice Smith",
@@ -907,8 +906,8 @@ class TestComposeNotificationEmail:
         """Test composing email with multiple rating changes."""
         from datetime import date
         rating_history = [
-            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2310, "blitz": 2115},
-            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+            {"date": date(2025, 11, 1), "standard": 2450, "rapid": 2310, "blitz": 2115},
+            {"date": date(2025, 10, 1), "standard": 2440, "rapid": 2300, "blitz": 2100}
         ]
         subject, body = email_notifier._compose_notification_email(
             "Bob Jones",
@@ -926,8 +925,8 @@ class TestComposeNotificationEmail:
         """Test composing email when player becomes rated."""
         from datetime import date
         rating_history = [
-            {"date": date(2025, 11, 30), "standard": 2450, "rapid": None, "blitz": None},
-            {"date": date(2025, 10, 31), "standard": None, "rapid": None, "blitz": None}
+            {"date": date(2025, 11, 1), "standard": 2450, "rapid": None, "blitz": None},
+            {"date": date(2025, 10, 1), "standard": None, "rapid": None, "blitz": None}
         ]
         subject, body = email_notifier._compose_notification_email(
             "Charlie Brown",
@@ -942,8 +941,8 @@ class TestComposeNotificationEmail:
         """Test composing email when player rating is removed."""
         from datetime import date
         rating_history = [
-            {"date": date(2025, 11, 30), "standard": None, "rapid": None, "blitz": None},
-            {"date": date(2025, 10, 31), "standard": 2400, "rapid": 2300, "blitz": 2100}
+            {"date": date(2025, 11, 1), "standard": None, "rapid": None, "blitz": None},
+            {"date": date(2025, 10, 1), "standard": 2400, "rapid": 2300, "blitz": 2100}
         ]
         subject, body = email_notifier._compose_notification_email(
             "Diana Prince",
@@ -958,8 +957,8 @@ class TestComposeNotificationEmail:
         """Test composing email with mixed unrated transitions."""
         from datetime import date
         rating_history = [
-            {"date": date(2025, 11, 30), "standard": 2500, "rapid": None, "blitz": 2350},
-            {"date": date(2025, 10, 31), "standard": None, "rapid": 2400, "blitz": 2300}
+            {"date": date(2025, 11, 1), "standard": 2500, "rapid": None, "blitz": 2350},
+            {"date": date(2025, 10, 1), "standard": None, "rapid": 2400, "blitz": 2300}
         ]
         subject, body = email_notifier._compose_notification_email(
             "Eve Wilson",
@@ -975,8 +974,8 @@ class TestComposeNotificationEmail:
         """Test that rating changes are sorted alphabetically by type."""
         from datetime import date
         rating_history = [
-            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2310, "blitz": 2115},
-            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+            {"date": date(2025, 11, 1), "standard": 2450, "rapid": 2310, "blitz": 2115},
+            {"date": date(2025, 10, 1), "standard": 2440, "rapid": 2300, "blitz": 2100}
         ]
         subject, body = email_notifier._compose_notification_email(
             "Frank Miller",
@@ -998,8 +997,8 @@ class TestComposeNotificationEmail:
         """Test that cc_email parameter is accepted but not used in composition."""
         from datetime import date
         rating_history = [
-            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2300, "blitz": 2100},
-            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+            {"date": date(2025, 11, 1), "standard": 2450, "rapid": 2300, "blitz": 2100},
+            {"date": date(2025, 10, 1), "standard": 2440, "rapid": 2300, "blitz": 2100}
         ]
         subject, body = email_notifier._compose_notification_email(
             "Grace Lee",
@@ -1016,8 +1015,8 @@ class TestComposeNotificationEmail:
         """Test that cc_email is optional."""
         from datetime import date
         rating_history = [
-            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2300, "blitz": 2100},
-            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+            {"date": date(2025, 11, 1), "standard": 2450, "rapid": 2300, "blitz": 2100},
+            {"date": date(2025, 10, 1), "standard": 2440, "rapid": 2300, "blitz": 2100}
         ]
         subject, body = email_notifier._compose_notification_email(
             "Henry Ford",
@@ -1032,8 +1031,8 @@ class TestComposeNotificationEmail:
         """Test composing email with special characters in player name."""
         from datetime import date
         rating_history = [
-            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2300, "blitz": 2100},
-            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+            {"date": date(2025, 11, 1), "standard": 2450, "rapid": 2300, "blitz": 2100},
+            {"date": date(2025, 10, 1), "standard": 2440, "rapid": 2300, "blitz": 2100}
         ]
         subject, body = email_notifier._compose_notification_email(
             "José García-López",
@@ -1048,8 +1047,8 @@ class TestComposeNotificationEmail:
         """Test composing email with large rating fluctuation."""
         from datetime import date
         rating_history = [
-            {"date": date(2025, 11, 30), "standard": 2500, "rapid": 1900, "blitz": 2100},
-            {"date": date(2025, 10, 31), "standard": 2200, "rapid": 2100, "blitz": 2100}
+            {"date": date(2025, 11, 1), "standard": 2500, "rapid": 1900, "blitz": 2100},
+            {"date": date(2025, 10, 1), "standard": 2200, "rapid": 2100, "blitz": 2100}
         ]
         subject, body = email_notifier._compose_notification_email(
             "Iris Newton",
@@ -1064,8 +1063,8 @@ class TestComposeNotificationEmail:
         """Test that email format is consistent with expected structure."""
         from datetime import date
         rating_history = [
-            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2300, "blitz": 2100},
-            {"date": date(2025, 10, 31), "standard": 2440, "rapid": 2300, "blitz": 2100}
+            {"date": date(2025, 11, 1), "standard": 2450, "rapid": 2300, "blitz": 2100},
+            {"date": date(2025, 10, 1), "standard": 2440, "rapid": 2300, "blitz": 2100}
         ]
         subject, body = email_notifier._compose_notification_email(
             "Jack Turner",
@@ -1082,7 +1081,7 @@ class TestComposeNotificationEmail:
         """Test composing email with only one month of history."""
         from datetime import date
         rating_history = [
-            {"date": date(2025, 11, 30), "standard": 2450, "rapid": 2300, "blitz": 2100}
+            {"date": date(2025, 11, 1), "standard": 2450, "rapid": 2300, "blitz": 2100}
         ]
         subject, body = email_notifier._compose_notification_email(
             "Kate Mitchell",

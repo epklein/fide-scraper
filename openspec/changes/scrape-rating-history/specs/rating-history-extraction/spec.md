@@ -49,7 +49,7 @@ Then all records should be preserved (no data loss)
 
 ### Requirement: Parse Month/Year String to Date
 
-The system SHALL convert Portuguese month/year strings (e.g., "Nov/2025", "Out/2025") to ISO 8601 date format using the last day of the month.
+The system SHALL convert Portuguese month/year strings (e.g., "Nov/2025", "Out/2025") to ISO 8601 date format using the first day of the month.
 
 **ID:** `RHE-003`
 **Priority:** High
@@ -57,17 +57,17 @@ The system SHALL convert Portuguese month/year strings (e.g., "Nov/2025", "Out/2
 #### Scenario: November mapping
 Given the month/year string "Nov/2025"
 When we parse the date
-Then we should get "2025-11-30" (last day of November)
+Then we should get "2025-11-01" (first day of November)
 
 #### Scenario: October mapping (Portuguese)
 Given the month/year string "Out/2025"
 When we parse the date
-Then we should get "2025-10-31" (October is "Out" in Portuguese)
+Then we should get "2025-10-01" (October is "Out" in Portuguese)
 
 #### Scenario: February with leap year
 Given the month/year string "Fev/2024" (leap year)
 When we parse the date
-Then we should get "2024-02-29"
+Then we should get "2024-02-01"
 
 #### Scenario: Invalid month string
 Given an invalid month/year string like "Inv/2025" (invalid Portuguese month)
@@ -87,7 +87,7 @@ The system SHALL return extracted history as a list of dictionaries, each contai
 Given a scraped HTML table
 When we extract history
 Then each record should contain:
-  - `date`: ISO 8601 date string (last day of month)
+  - `date`: ISO 8601 date string (first day of month)
   - `standard`: Integer rating or None
   - `rapid`: Integer rating or None
   - `blitz`: Integer rating or None
@@ -103,6 +103,6 @@ And we should not exclude the entire month
 ## Implementation Notes
 
 - Portuguese month abbreviations: Jan, Fev, Mar, Abr, Mai, Jun, Jul, Ago, Set, Out, Nov, Dez
-- Uses `calendar.monthrange()` to calculate last day of month correctly
+- Uses `date(year, month, 1)` to produce the first day of the month
 - Gracefully handles malformed HTML or missing table
 - Returns empty list if no valid records found (not an error condition)
