@@ -10,6 +10,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from typing import Optional, Tuple, List, Dict
+import re
 import csv
 from datetime import date
 import argparse
@@ -244,6 +245,7 @@ def _extract_all_history_rows(html: str) -> List[Dict]:
         table = soup.find('table', {'class': 'profile-table_calc'})
 
         if not table:
+            logger.debug("Rating table 'profile-table_calc' not found in page")
             return []
 
         # Find all rows (TR elements)
@@ -251,6 +253,7 @@ def _extract_all_history_rows(html: str) -> List[Dict]:
 
         # We need at least 2 rows (header + at least one data row)
         if len(rows) < 2:
+            logger.debug(f"Rating table has {len(rows)} row(s), need at least 2 (header + data)")
             return []
 
         history_records = []
@@ -302,7 +305,8 @@ def _extract_all_history_rows(html: str) -> List[Dict]:
 
         return history_records
 
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Rating history parsing failed: {type(e).__name__}: {e}", exc_info=True)
         return []
 
 
@@ -473,7 +477,8 @@ def extract_player_name(html: str) -> Optional[str]:
                 return name
         
         return None
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Player name extraction failed: {type(e).__name__}: {e}", exc_info=True)
         return None
 
 
@@ -1096,7 +1101,9 @@ def process_batch(fide_ids: List[str], historical_data: Dict[str, List[Dict]] = 
     for fide_id in fide_ids:
         # Validate FIDE ID format
         if not validate_fide_id(fide_id):
-            errors.append(f"Invalid FIDE ID format: {fide_id} (skipped)")
+            msg = f"Invalid FIDE ID format: {fide_id} (skipped)"
+            logger.warning(msg)
+            errors.append(msg)
             continue
 
         try:
@@ -1104,7 +1111,9 @@ def process_batch(fide_ids: List[str], historical_data: Dict[str, List[Dict]] = 
             html = fetch_fide_profile(fide_id)
 
             if html is None:
-                errors.append(f"Player not found (FIDE ID: {fide_id}) (skipped)")
+                msg = f"Player not found (FIDE ID: {fide_id}) (skipped)"
+                logger.warning(msg)
+                errors.append(msg)
                 continue
 
             # Extract player name
@@ -1115,7 +1124,17 @@ def process_batch(fide_ids: List[str], historical_data: Dict[str, List[Dict]] = 
 
             # Check if we got at least one rating or player name
             if not rating_history and not player_name:
-                errors.append(f"Unable to extract data from FIDE profile (FIDE ID: {fide_id}) (skipped)")
+                # Not an exception path: the page fetched fine (HTTP 200) but yielded
+                # no name and no ratings. Log page shape so the cause is diagnosable.
+                has_table = 'profile-table_calc' in html
+                snippet = re.sub(r'\s+', ' ', html[:300]).strip()
+                msg = (
+                    f"Unable to extract data from FIDE profile (FIDE ID: {fide_id}) (skipped) "
+                    f"[html_len={len(html)}, rating_table_present={has_table}]"
+                )
+                logger.warning(msg)
+                logger.debug(f"FIDE ID {fide_id} page starts: {snippet}")
+                errors.append(msg)
                 continue
 
             # Detect new months in history
@@ -1144,16 +1163,24 @@ def process_batch(fide_ids: List[str], historical_data: Dict[str, List[Dict]] = 
             })
 
         except ConnectionError as e:
-            errors.append(f"Network error for FIDE ID {fide_id}: {e} (skipped)")
+            msg = f"Network error for FIDE ID {fide_id}: {e} (skipped)"
+            logger.error(msg)
+            errors.append(msg)
             continue
         except requests.Timeout:
-            errors.append(f"Request timeout for FIDE ID {fide_id} (skipped)")
+            msg = f"Request timeout for FIDE ID {fide_id} (skipped)"
+            logger.error(msg)
+            errors.append(msg)
             continue
         except requests.HTTPError as e:
-            errors.append(f"HTTP error for FIDE ID {fide_id}: {e} (skipped)")
+            msg = f"HTTP error for FIDE ID {fide_id}: {e} (skipped)"
+            logger.error(msg)
+            errors.append(msg)
             continue
         except Exception as e:
-            errors.append(f"Unexpected error for FIDE ID {fide_id}: {e} (skipped)")
+            msg = f"Unexpected error for FIDE ID {fide_id}: {e} (skipped)"
+            logger.error(msg)
+            errors.append(msg)
             continue
 
     return results, errors
