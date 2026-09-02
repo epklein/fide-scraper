@@ -10,6 +10,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from typing import Optional, Tuple, List, Dict
+import time
 import re
 import csv
 from datetime import date
@@ -181,28 +182,56 @@ def construct_fide_url(fide_id: str) -> str:
     return f"https://ratings.fide.com/profile/{fide_id}/chart"
 
 
+class RateLimitError(Exception):
+    """
+    Raised when FIDE throttles the caller.
+
+    FIDE signals throttling with HTTP 200 and an effectively empty body (just a
+    UTF-8 BOM), so it cannot be detected via status code alone.
+    """
+    pass
+
+
+# FIDE rate-limits by request rate (~95 requests per ~2-minute window), and an
+# nginx micro-cache in front of it caches the empty throttle response per URL,
+# making a throttled player unrecoverable for several minutes. So the strategy
+# is simply to stay under the limit: pace requests at ~30/min.
+REQUEST_DELAY_SECONDS = float(os.getenv('REQUEST_DELAY_SECONDS', '1.5'))
+
+
+def _is_rate_limited_response(text: str) -> bool:
+    """
+    Detect FIDE's throttle response: HTTP 200 with an empty or BOM-only body.
+
+    A real profile page is tens of kilobytes, so anything this small is not a
+    profile. Kept lenient (whitespace/BOM only) rather than matching exactly
+    one character, in case the stub varies.
+    """
+    return not text.strip().lstrip('\ufeff')
+
+
 def fetch_fide_profile(fide_id: str, timeout: int = 10) -> Optional[str]:
     """
     Fetch FIDE profile HTML page.
-    
+
     Args:
         fide_id: Validated FIDE ID
         timeout: Request timeout in seconds (default: 10)
-        
+
     Returns:
-        HTML content as string, or None on error
-        
+        HTML content as string, or None if the player does not exist (404)
+
     Raises:
+        RateLimitError: When FIDE returns its empty throttle response
         ConnectionError: On network errors
         requests.Timeout: On timeout
         requests.HTTPError: On HTTP errors
     """
     url = construct_fide_url(fide_id)
-    
+
     try:
         response = requests.get(url, timeout=timeout)
         response.raise_for_status()
-        return response.text
     except requests.ConnectionError as e:
         raise ConnectionError(f"Unable to connect to FIDE website: {e}")
     except requests.Timeout:
@@ -211,6 +240,18 @@ def fetch_fide_profile(fide_id: str, timeout: int = 10) -> Optional[str]:
         if response.status_code == 404:
             return None
         raise requests.HTTPError(f"HTTP error {response.status_code}: {e}")
+
+    # HTTP 200 but empty body means throttled, not "player has no data".
+    if _is_rate_limited_response(response.text):
+        logger.warning(
+            f"FIDE throttle response for FIDE ID {fide_id}: "
+            f"status={response.status_code}, headers={response.headers}"
+        )
+        raise RateLimitError(
+            f"FIDE returned an empty response for FIDE ID {fide_id} (rate limited)"
+        )
+
+    return response.text
 
 
 def _extract_all_history_rows(html: str) -> List[Dict]:
@@ -1071,9 +1112,64 @@ def format_console_output(player_profiles: List[Dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _scrape_player(fide_id: str, historical_data: Dict[str, List[Dict]]) -> Tuple[Optional[Dict], Optional[str]]:
+    """
+    Fetch and parse a single player's profile.
+
+    Args:
+        fide_id: Validated FIDE ID
+        historical_data: Stored ratings, for new-month detection
+
+    Returns:
+        Tuple of (result, error). Exactly one is non-None.
+
+    Raises:
+        RateLimitError: Propagated so the caller can pause and defer this ID.
+    """
+    html = fetch_fide_profile(fide_id)
+
+    if html is None:
+        return None, f"Player not found (FIDE ID: {fide_id}) (skipped)"
+
+    player_name = extract_player_name(html) or ""
+    rating_history = extract_rating_history(html)
+
+    # Neither name nor ratings: page fetched (HTTP 200) but yielded nothing.
+    # Log page shape so an unexpected layout change stays diagnosable.
+    if not rating_history and not player_name:
+        has_table = 'profile-table_calc' in html
+        snippet = re.sub(r'\s+', ' ', html[:300]).strip()
+        logger.debug(f"FIDE ID {fide_id} page starts: {snippet}")
+        return None, (
+            f"Unable to extract data from FIDE profile (FIDE ID: {fide_id}) (skipped) "
+            f"[html_len={len(html)}, rating_table_present={has_table}]"
+        )
+
+    new_months = detect_new_months(fide_id, rating_history, historical_data)
+
+    # Most recent month (first row) supplies the current rating display
+    latest = rating_history[0] if rating_history else {}
+
+    return {
+        'Date': date.today().isoformat(),
+        'FIDE ID': fide_id,
+        'Player Name': player_name,
+        'Standard': latest.get('standard'),
+        'Rapid': latest.get('rapid'),
+        'Blitz': latest.get('blitz'),
+        'Rating History': rating_history,
+        'New Months': new_months
+    }, None
+
+
 def process_batch(fide_ids: List[str], historical_data: Dict[str, List[Dict]] = None) -> Tuple[List[Dict], List[str]]:
     """
     Process a batch of FIDE IDs and extract rating history with new month detection.
+
+    Requests are paced REQUEST_DELAY_SECONDS apart to stay under FIDE's rate
+    limit. A player that still gets throttled is reported as an error - the
+    empty throttle response is cached per URL on FIDE's side, so retrying
+    within the same run does not work.
 
     Args:
         fide_ids: List of FIDE ID strings to process
@@ -1093,13 +1189,13 @@ def process_batch(fide_ids: List[str], historical_data: Dict[str, List[Dict]] = 
     """
     results = []
     errors = []
+    first_request = True
 
     # Load historical data if not provided
     if historical_data is None:
         historical_data = load_historical_ratings_by_player(OUTPUT_FILENAME)
 
     for fide_id in fide_ids:
-        # Validate FIDE ID format
         if not validate_fide_id(fide_id):
             msg = f"Invalid FIDE ID format: {fide_id} (skipped)"
             logger.warning(msg)
@@ -1107,81 +1203,38 @@ def process_batch(fide_ids: List[str], historical_data: Dict[str, List[Dict]] = 
             continue
 
         try:
-            # Fetch profile
-            html = fetch_fide_profile(fide_id)
+            # Throttle: stay under FIDE's rate limit instead of handling it.
+            if not first_request:
+                time.sleep(REQUEST_DELAY_SECONDS)
+            first_request = False
 
-            if html is None:
-                msg = f"Player not found (FIDE ID: {fide_id}) (skipped)"
-                logger.warning(msg)
-                errors.append(msg)
-                continue
+            result, error = _scrape_player(fide_id, historical_data)
+            if result is not None:
+                results.append(result)
+            else:
+                logger.warning(error)
+                errors.append(error)
 
-            # Extract player name
-            player_name = extract_player_name(html) or ""
-
-            # Extract complete rating history
-            rating_history = extract_rating_history(html)
-
-            # Check if we got at least one rating or player name
-            if not rating_history and not player_name:
-                # Not an exception path: the page fetched fine (HTTP 200) but yielded
-                # no name and no ratings. Log page shape so the cause is diagnosable.
-                has_table = 'profile-table_calc' in html
-                snippet = re.sub(r'\s+', ' ', html[:300]).strip()
-                msg = (
-                    f"Unable to extract data from FIDE profile (FIDE ID: {fide_id}) (skipped) "
-                    f"[html_len={len(html)}, rating_table_present={has_table}]"
-                )
-                logger.warning(msg)
-                logger.debug(f"FIDE ID {fide_id} page starts: {snippet}")
-                errors.append(msg)
-                continue
-
-            # Detect new months in history
-            new_months = detect_new_months(fide_id, rating_history, historical_data)
-
-            # For current rating display, use the most recent month if available
-            current_standard = None
-            current_rapid = None
-            current_blitz = None
-            if rating_history:
-                latest = rating_history[0]  # First item is most recent (newest month)
-                current_standard = latest.get('standard')
-                current_rapid = latest.get('rapid')
-                current_blitz = latest.get('blitz')
-
-            # Add to results
-            results.append({
-                'Date': date.today().isoformat(),
-                'FIDE ID': fide_id,
-                'Player Name': player_name,
-                'Standard': current_standard,
-                'Rapid': current_rapid,
-                'Blitz': current_blitz,
-                'Rating History': rating_history,
-                'New Months': new_months
-            })
-
+        except RateLimitError as e:
+            msg = f"Rate limited by FIDE for FIDE ID {fide_id}: {e} (skipped)"
+            logger.error(msg)
+            errors.append(msg)
         except ConnectionError as e:
             msg = f"Network error for FIDE ID {fide_id}: {e} (skipped)"
             logger.error(msg)
             errors.append(msg)
-            continue
         except requests.Timeout:
             msg = f"Request timeout for FIDE ID {fide_id} (skipped)"
             logger.error(msg)
             errors.append(msg)
-            continue
         except requests.HTTPError as e:
             msg = f"HTTP error for FIDE ID {fide_id}: {e} (skipped)"
             logger.error(msg)
             errors.append(msg)
-            continue
         except Exception as e:
             msg = f"Unexpected error for FIDE ID {fide_id}: {e} (skipped)"
             logger.error(msg)
             errors.append(msg)
-            continue
 
     return results, errors
 
@@ -1223,6 +1276,7 @@ Configuration:
     try:
         start_time = datetime.now()
         logger.info(f"FIDE scraper started - mode: {execution_mode.upper()}, time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Rate limit config: delay={REQUEST_DELAY_SECONDS}s")
 
         # Load player data from CSV file (includes FIDE IDs and emails)
         logger.info(f"Loading player data from {FIDE_PLAYERS_FILE}")

@@ -1634,3 +1634,58 @@ class TestPostRatingToApi:
         assert result is True
         call_kwargs = mock_post.call_args[1]
         assert call_kwargs['timeout'] == 5
+
+
+class TestRateLimitDetection:
+    """Tests for FIDE throttle detection and request pacing."""
+
+    def test_bom_only_body_is_rate_limited(self):
+        """FIDE signals throttling with a BOM-only body and HTTP 200."""
+        assert fide_scraper._is_rate_limited_response('\ufeff') is True
+
+    def test_empty_and_whitespace_bodies_are_rate_limited(self):
+        assert fide_scraper._is_rate_limited_response('') is True
+        assert fide_scraper._is_rate_limited_response('   \n  ') is True
+
+    def test_real_page_is_not_rate_limited(self):
+        html = '<html><table class="profile-table_calc"></table></html>'
+        assert fide_scraper._is_rate_limited_response(html) is False
+
+    @patch('fide_scraper.requests.get')
+    def test_fetch_raises_rate_limit_error_on_empty_200(self, mock_get):
+        """A 200 with an empty body must raise, not be treated as a valid page."""
+        mock_get.return_value = Mock(status_code=200, text='\ufeff',
+                                     raise_for_status=Mock())
+
+        with pytest.raises(fide_scraper.RateLimitError):
+            fide_scraper.fetch_fide_profile('12345678')
+
+    @patch('fide_scraper.time.sleep')
+    @patch('fide_scraper.requests.get')
+    def test_throttled_player_reported_as_rate_limited(self, mock_get, mock_sleep):
+        """Throttled players must not be mislabelled as extraction failures."""
+        mock_get.return_value = Mock(status_code=200, text='\ufeff',
+                                     raise_for_status=Mock())
+
+        results, errors = fide_scraper.process_batch(['12345678'], historical_data={})
+
+        assert results == []
+        assert len(errors) == 1
+        assert 'Rate limited' in errors[0]
+
+    @patch('fide_scraper.time.sleep')
+    @patch('fide_scraper.requests.get')
+    def test_requests_are_paced(self, mock_get, mock_sleep):
+        """A delay is inserted between requests (not before the first)."""
+        page = '<html><h1>Test Player</h1></html>'
+        mock_get.return_value = Mock(status_code=200, text=page,
+                                     raise_for_status=Mock())
+
+        results, errors = fide_scraper.process_batch(
+            ['12345671', '12345672', '12345673'], historical_data={}
+        )
+
+        assert len(results) == 3
+        delays = [c for c in mock_sleep.call_args_list
+                  if c[0][0] == fide_scraper.REQUEST_DELAY_SECONDS]
+        assert len(delays) == 2
