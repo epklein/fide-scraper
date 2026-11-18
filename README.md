@@ -49,6 +49,7 @@ The Docker setup includes:
 ### Output Files
 
 Results are written to `/data/fide_ratings.csv` on your host machine (mounted from container).
+The FIDE events sync keeps its state in `/data/fide_events_state.csv` (set `FIDE_EVENTS_STATE_FILE`).
 
 ### Scheduled Execution with Cron
 
@@ -369,6 +370,11 @@ The script uses environment variables to configure input, output, and email sett
 - **`FIDE_RATINGS_API_ENDPOINT`**: URL to post rating updates to external service (optional)
   - Example: `https://chesshub.cloud/api/fide-ratings/`
   - When set, each rating update is posted to this endpoint after scraping
+- **`FIDE_EVENTS_API_ENDPOINT`**: URL to post FIDE events to Chess Hub (optional)
+  - Example: `https://chesshub.cloud/api/fide-events/`
+  - When set together with `API_TOKEN`, the [FIDE events sync](#fide-events-sync) runs after the ratings
+- **`FIDE_EVENTS_STATE_FILE`**: Local file recording the newest FIDE list each player was checked for (default: `fide_events_state.csv`; Docker: `/data/fide_events_state.csv`)
+- **`FIDE_EVENTS_MAX_REQUESTS`**: Maximum FIDE requests the events sync makes per run (default: `300`)
 
 ### Setting Environment Variables
 
@@ -404,6 +410,30 @@ FIDE_PLAYERS_FILE=my_players.csv FIDE_OUTPUT_FILE=my_ratings_history.csv python 
 ```
 
 **Note**: If no environment variables are set, the script uses the default filenames: `players.csv` and `fide_ratings.csv`.
+
+## FIDE Events Sync
+
+When `FIDE_EVENTS_API_ENDPOINT` and `API_TOKEN` are set, each run also sends to Chess Hub the tournaments the players took part in. It reads them from the AJAX endpoints behind the Calculations tab of the FIDE profile. FIDE has no endpoint for a player's whole history, so the events are read one rating period and one time control at a time. The sync fetches only what Chess Hub does not have yet:
+
+1. It runs after the ratings: CSV, notifications and the ratings API. A failure in the sync never changes them or the exit code.
+2. It reads `GET /api/fide-events/latest-periods/` once: the latest rating period Chess Hub stores for each player.
+3. It considers a player once per FIDE list. The newest list is the newest month in the rating histories scraped in the same run. A player already checked for that list in `FIDE_EVENTS_STATE_FILE` costs no request.
+4. It lists the player's periods (`a_calculations.phtml`). It fetches each period and time control from the stored period on, that period included, oldest first (`a_indv_calculation.php`). Each one is posted to `POST /api/fide-events/` right away.
+5. The player is marked checked for the list only after all of their periods are posted.
+
+**Cost.** In steady state: one listing request per player per monthly list, plus one request per new period and time control. The first sync of a player is a full backfill, typically a dozen or more requests.
+
+**Backfill across runs.** The sync stops for the run when it reaches `FIDE_EVENTS_MAX_REQUESTS` or when FIDE throttles. Because periods are sent oldest first, Chess Hub's stored period tells the next run where to resume, with no gaps. Other errors (network, parsing, a rejected post) skip only that player, who is retried in the next run.
+
+**Log.** Each run logs one summary line:
+
+```
+FIDE events sync: stop=completed, due=3, completed=3, failed=0, periods_posted=4, events_created=2, events_updated=0, fide_requests=7
+```
+
+`stop` is `completed`, `cap`, `throttled` or `skipped` (no rating history in the run, or `latest-periods/` unavailable).
+
+**Resetting.** Deleting `FIDE_EVENTS_STATE_FILE`, or a player's row in it, makes the players due again in the next run. That costs one listing request each, plus a re-send of their latest stored period. It does not re-send older periods. Chess Hub's stored period still bounds what is fetched.
 
 ## Testing
 

@@ -20,6 +20,7 @@ import logging
 from datetime import datetime
 from email_notifier import send_batch_notifications
 from ratings_api import send_batch_api_updates
+from fide_events import sync_events
 
 # Load environment variables from .env file
 load_dotenv()
@@ -1352,6 +1353,15 @@ Configuration:
         console_output = format_console_output(results)
 
         logger.debug("Latest FIDE Ratings: \n" + console_output)
+
+        # Sync FIDE events after everything rating-related is done. It is
+        # optional and must never change the outputs above or the exit code.
+        t0 = datetime.now()
+        try:
+            sync_events(fide_ids, results, REQUEST_DELAY_SECONDS)
+        except Exception as e:
+            logger.error(f"FIDE events sync failed: {e}")
+        logger.debug(f"FIDE events sync step took {(datetime.now() - t0).total_seconds():.1f}s")
 
         # Print summary
         success_count = len(results)
